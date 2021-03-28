@@ -1,0 +1,47 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><link rel="stylesheet" type="text/css" href="style.css" /><script type="text/javascript" src="highlight.js"></script></head><body><pre><span class="hs-pragma">{-# LANGUAGE RankNTypes #-}</span><span>
+</span><span id="line-2"></span><span class="hs-pragma">{-# LANGUAGE BlockArguments #-}</span><span>
+</span><span id="line-3"></span><span class="hs-pragma">{-# LANGUAGE Unsafe #-}</span><span>
+</span><span id="line-4"></span><span class="hs-pragma">{-# LANGUAGE LambdaCase #-}</span><span>
+</span><span id="line-5"></span><span class="hs-pragma">{-# LANGUAGE LinearTypes #-}</span><span>
+</span><span id="line-6"></span><span class="hs-pragma">{-# LANGUAGE TypeOperators #-}</span><span>
+</span><span id="line-7"></span><span class="hs-pragma">{-# LANGUAGE GADTs #-}</span><span>
+</span><span id="line-8"></span><span>
+</span><span id="line-9"></span><span class="hs-keyword">module</span><span> </span><span class="hs-identifier">Linear.Logic.Unsafe</span><span>
+</span><span id="line-10"></span><span class="hs-special">(</span><span> </span><span class="annot"><span class="hs-identifier">toLinear</span></span><span>
+</span><span id="line-11"></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Linear.Logic.Unsafe.html#unsafePar"><span class="hs-identifier">unsafePar</span></a></span><span>
+</span><span id="line-12"></span><span class="hs-special">)</span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-13"></span><span> </span><span>
+</span><span id="line-14"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><a href="Linear.Logic.html"><span class="hs-identifier">Linear.Logic</span></a></span><span>
+</span><span id="line-15"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Unsafe.Linear</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">toLinear</span></span><span class="hs-special">)</span><span>
+</span><span id="line-16"></span><span>
+</span><span id="line-17"></span><span class="hs-comment">-- | When developing proofs it is often handy to lie about multiplicity,</span><span>
+</span><span id="line-18"></span><span class="hs-comment">-- while you are still filling in holes. This enables that workflow.</span><span>
+</span><span id="line-19"></span><span class="hs-comment">-- When you are done, you can convert from 'unsafePar' back to 'par'</span><span>
+</span><span id="line-20"></span><span class="hs-comment">--</span><span>
+</span><span id="line-21"></span><span class="hs-comment">-- 'toLinear' can also come in handy temporarily during this</span><span>
+</span><span id="line-22"></span><span class="hs-comment">-- process.</span><span>
+</span><span id="line-23"></span><span id="local-6989586621679052210"><span id="local-6989586621679052212"><span class="annot"><a href="Linear.Logic.Unsafe.html#unsafePar"><span class="hs-identifier hs-type">unsafePar</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="hs-keyword">forall</span><span> </span><span id="local-6989586621679052209"><span class="annot"><a href="#local-6989586621679052209"><span class="hs-identifier hs-type">c</span></a></span></span><span class="hs-operator">.</span><span> </span><span class="annot"><a href="Linear.Logic.Y.html#Y"><span class="hs-identifier hs-type">Y</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Linear.Logic.html#Not"><span class="hs-identifier hs-type">Not</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679052212"><span class="hs-identifier hs-type">b</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679052210"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Linear.Logic.html#Not"><span class="hs-identifier hs-type">Not</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679052210"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679052212"><span class="hs-identifier hs-type">b</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><a href="#local-6989586621679052209"><span class="hs-identifier hs-type">c</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679052209"><span class="hs-identifier hs-type">c</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">%</span><span class="hs-number">1</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679052210"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="annot"><a href="Linear.Logic.html#%214B"><span class="hs-operator hs-type">&#8523;</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679052212"><span class="hs-identifier hs-type">b</span></a></span></span></span><span>
+</span><span id="line-24"></span><span id="unsafePar"><span class="annot"><span class="annottext">unsafePar :: forall b a.
+(forall c. Y (Not b -&gt; a) (Not a -&gt; b) c -&gt; c) %1 -&gt; a &#8523; b
+</span><a href="Linear.Logic.Unsafe.html#unsafePar"><span class="hs-identifier hs-var hs-var">unsafePar</span></a></span></span><span> </span><span id="local-6989586621679052177"><span class="annot"><span class="annottext">forall c. Y (Not b -&gt; a) (Not a -&gt; b) c -&gt; c
+</span><a href="#local-6989586621679052177"><span class="hs-identifier hs-var">f</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(forall c. Y (Not b %1 -&gt; a) (Not a %1 -&gt; b) c -&gt; c) %1 -&gt; a &#8523; b
+forall a b.
+(forall c. Y (Not b %1 -&gt; a) (Not a %1 -&gt; b) c -&gt; c) %1 -&gt; a &#8523; b
+</span><a href="Linear.Logic.html#par"><span class="hs-identifier hs-var">par</span></a></span><span> </span><span class="hs-glyph">\</span><span class="hs-glyph">case</span><span>
+</span><span id="line-25"></span><span>  </span><span class="annot"><span class="annottext">Y (Not b %1 -&gt; a) (Not a %1 -&gt; b) c
+</span><a href="Linear.Logic.Y.html#L"><span class="hs-identifier hs-var">L</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">(Not b -&gt; a) %1 -&gt; Not b %1 -&gt; a
+forall a b (p :: Multiplicity). (a %p -&gt; b) %1 -&gt; a %1 -&gt; b
+</span><span class="hs-identifier hs-var">toLinear</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Y (Not b -&gt; a) (Not a -&gt; b) (Not b -&gt; a) -&gt; Not b -&gt; a
+forall c. Y (Not b -&gt; a) (Not a -&gt; b) c -&gt; c
+</span><a href="#local-6989586621679052177"><span class="hs-identifier hs-var">f</span></a></span><span> </span><span class="annot"><span class="annottext">Y (Not b -&gt; a) (Not a -&gt; b) (Not b -&gt; a)
+forall i j k (a :: i) (b :: j) (c :: k). (a ~~ c) =&gt; Y a b c
+</span><a href="Linear.Logic.Y.html#L"><span class="hs-identifier hs-var">L</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-26"></span><span>  </span><span class="annot"><span class="annottext">Y (Not b %1 -&gt; a) (Not a %1 -&gt; b) c
+</span><a href="Linear.Logic.Y.html#R"><span class="hs-identifier hs-var">R</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">(Not a -&gt; b) %1 -&gt; Not a %1 -&gt; b
+forall a b (p :: Multiplicity). (a %p -&gt; b) %1 -&gt; a %1 -&gt; b
+</span><span class="hs-identifier hs-var">toLinear</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Y (Not b -&gt; a) (Not a -&gt; b) (Not a -&gt; b) -&gt; Not a -&gt; b
+forall c. Y (Not b -&gt; a) (Not a -&gt; b) c -&gt; c
+</span><a href="#local-6989586621679052177"><span class="hs-identifier hs-var">f</span></a></span><span> </span><span class="annot"><span class="annottext">Y (Not b -&gt; a) (Not a -&gt; b) (Not a -&gt; b)
+forall i j k (a :: i) (b :: j) (c :: k). (b ~~ c) =&gt; Y a b c
+</span><a href="Linear.Logic.Y.html#R"><span class="hs-identifier hs-var">R</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-27"></span></pre></body></html>
