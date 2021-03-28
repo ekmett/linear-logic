@@ -39,8 +39,6 @@ data Y a b c where
 
 #else
 
--- This requires GHC to properly handle pattern synonyms and linear haskell
-
 import Data.Type.Equality
 import GHC.Prim
 import GHC.Types
