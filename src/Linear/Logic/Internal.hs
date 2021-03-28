@@ -19,6 +19,7 @@
 {-# language KindSignatures #-}
 {-# language DataKinds #-}
 {-# language UndecidableInstances #-}
+{-# language RoleAnnotations #-}
 {-# language UndecidableSuperClasses #-}
 {-# language TypeFamilies #-}
 {-# language TypeFamilyDependencies #-}
@@ -67,10 +68,13 @@ instance Prop Bot where
   type Not Bot = ()
   Bot a != () = a
 
+-- TODO: allow representational roles by using Coercible a a'?
+type role Y nominal nominal nominal
 data Y a b c where
   L :: Y a b a
-  R :: Y a b b 
+  R :: Y a b b
 
+type role (&) nominal nominal
 newtype a & b = With (forall c. Y a b c -> c)
 
 with :: (forall c. Y a b c -> c) %1 -> a & b
@@ -80,7 +84,7 @@ infixr 3 &
 type With = (&)
 
 withL :: a & b %1 -> a
-withL (With f) = f L 
+withL (With f) = f L
 
 withR :: a & b %1 -> b
 withR (With f) = f R
@@ -102,6 +106,7 @@ infixr 3 *
 type (*) = (,)
 
 infixr 2 ⅋
+type role (⅋) nominal nominal
 newtype a ⅋ b = Par (forall c. Y (Not b %1 -> a) (Not a %1 -> b) c %1 -> c)
 
 type Par = (⅋)
@@ -219,11 +224,13 @@ contraction = unsafePar \case
     R -> \urp -> parR (parR x urp) urp
 
 -- ? modality
+type role WhyNot nominal
 newtype WhyNot a = WhyNot (forall r. Not a %1 -> r)
 
 because :: WhyNot a %1 -> Not a %1 -> r
 because (WhyNot a) = a
 
+type role Why nominal
 newtype Why a = Why (Not a)
 
 why :: Why a %1 -> Not a
