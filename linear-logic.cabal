@@ -14,5 +14,7 @@ library
     Linear.Logic.Ur
   exposed-modules:
     Linear.Logic
+    Linear.Logic.Functor
+    Linear.Logic.Unsafe
   ghc-options: -Wall -fno-show-valid-hole-fits
   hs-source-dirs: src
