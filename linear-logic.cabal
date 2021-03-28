@@ -1,0 +1,18 @@
+cabal-version: 2.2
+name: linear-logic
+version: 0
+build-type: Simple
+
+library
+  default-language: Haskell2010
+  build-depends:
+    base,
+    contravariant,
+    ghc-prim,
+    linear-base
+  exposed-modules:
+    Linear.Logic.Internal
+    Linear.Logic.Orphans
+    Linear.Logic
+  ghc-options: -Wall -fno-show-valid-hole-fits
+  hs-source-dirs: src
