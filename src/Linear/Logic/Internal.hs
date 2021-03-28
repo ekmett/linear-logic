@@ -1,43 +1,34 @@
 {-# language BlockArguments #-}
-{-# language StrictData #-}
-{-# language AllowAmbiguousTypes #-}
-{-# language LambdaCase #-}
-{-# language ConstraintKinds #-}
-{-# language InstanceSigs #-}
-{-# language PolyKinds #-}
-{-# language QuantifiedConstraints #-}
-{-# language LiberalTypeSynonyms #-}
+{-# language DerivingStrategies #-}
+{-# language EmptyCase #-}
 {-# language FlexibleContexts #-}
 {-# language FlexibleInstances #-}
+{-# language GADTs #-}
+{-# language LambdaCase #-}
+{-# language LinearTypes #-}
+{-# language NoStarIsType #-}
+{-# language PolyKinds #-}
+{-# language QuantifiedConstraints #-}
+{-# language RankNTypes #-}
+{-# language RoleAnnotations #-}
+{-# language Safe #-}
+{-# language StandaloneDeriving #-}
+{-# language StandaloneKindSignatures #-}
+{-# language StrictData #-}
 {-# language TupleSections #-}
 {-# language TypeApplications #-}
-{-# language EmptyCase #-}
-{-# language NoStarIsType #-}
-{-# language StandaloneKindSignatures #-}
-{-# language StandaloneDeriving #-}
-{-# language DerivingStrategies #-}
-{-# language RankNTypes #-}
-{-# language ScopedTypeVariables #-}
-{-# language KindSignatures #-}
-{-# language DataKinds #-}
-{-# language UndecidableInstances #-}
-{-# language RoleAnnotations #-}
-{-# language UndecidableSuperClasses #-}
 {-# language TypeFamilies #-}
 {-# language TypeFamilyDependencies #-}
 {-# language TypeOperators #-}
-{-# language LinearTypes #-}
-{-# language GADTs #-}
+{-# language UndecidableInstances #-}
+{-# language UndecidableSuperClasses #-}
 
 module Linear.Logic.Internal where
 
-import Data.Functor.Contravariant
 import Data.Kind
 import Data.Void
-import Data.Unrestricted.Linear
-import Linear.Logic.Orphans ()
+import Linear.Logic.Ur
 import Prelude hiding (Functor)
-import Unsafe.Linear as Unsafe
 
 class (Prop (Not a), Not (Not a) ~ a) => Prop a where
   -- | \(a^\bot\). The type of refutations of \(a\)
@@ -129,18 +120,6 @@ par = Par
 runPar :: a ⅋ b %1 -> Y (Not b %1 -> a) (Not a %1 -> b) c %1 -> c
 runPar (Par p) y = p y
 
-unsafePar :: (Prop a, Prop b) => (forall c. Y (Not b -> a) (Not a -> b) c -> c) -> a ⅋ b
-unsafePar f = Par \case
-  L -> Unsafe.toLinear (f L)
-  R -> Unsafe.toLinear (f R)
-
-{-
-unsafePar :: (Prop a, Prop b) => (forall c. Y (Not b %1 -> a) (Not a %1 -> b) c -> c) -> a ⅋ b
-unsafePar f = Par \case
-  L -> Unsafe.toLinear (f L)
-  R -> Unsafe.toLinear (f R)
--}
-
 parL :: a ⅋ b %1 -> Not b %1 -> a
 parL (Par p) = p L
 
@@ -188,25 +167,19 @@ unfun :: forall a b. (a ⊸ b) %1 -> Not b %1 -> Not a
 unfun (Par p) = p L
 
 -- | Heyting negation
-newtype No a = No { runNo :: forall r. a -> r }
-
-no :: No a -> a %1 -> r
-no (No f) = Unsafe.toLinear f 
-
-instance Contravariant No where
-  contramap f (No g) = No (g . f)
+newtype No a = No { runNo :: forall r. Ur a %1 -> r }
 
 -- | The exponential, or unrestricted modality, \( !a \)
 --
 -- This embeds arbitrary non-linear Haskell values into 'Prop'.
 instance Prop (Ur a) where
   type Not (Ur a) = No a
-  Ur a != No f = f a
+  a != No f = f a
 
 -- | Heyting negation, used as a refutation of the exponential
 instance Prop (No a) where
   type Not (No a) = Ur a 
-  No f != Ur a = f a
+  No f != a = f a
 
 {-
 funPar :: forall a b. Prop a => (a %1 -> b) %1 -> a ⊸ b
@@ -226,27 +199,27 @@ weakenUr = par \case
  
 distUr :: forall p q. Prop p => Ur (p ⊸ q) ⊸ (Ur p ⊸ Ur q)
 distUr = par \case
-  L -> \(Ur yp, No cq) -> No \f -> cq $ parR f yp
-  R -> \(Ur f) -> par \case
-    L -> \(No cq) -> No \yp -> cq $ parR f yp
-    R -> \(Ur yp) -> Ur $ parR f yp
+  L -> \(Ur p, No nq) -> No \(Ur nppq) -> nq (Ur (parR nppq p))
+  R -> \(Ur nppq) -> par \case
+    L -> \(No nq) -> No \(Ur p) -> nq (Ur (parR nppq p))
+    R -> \(Ur p) -> Ur (parR nppq p)
 
 extractUr :: forall p. Prop p => Ur p ⊸ p
 extractUr = par \case
-  L -> \np -> No \q -> np != q
+  L -> \np -> No \(Ur p) -> np != p
   R -> \(Ur p) -> p
 
 duplicateUr :: forall p. Ur p ⊸ Ur (Ur p)
-duplicateUr = unsafePar \case
-  L -> \x -> contramap Ur x
-  R -> Ur
+duplicateUr = par \case
+  L -> \(No f) -> No \(Ur p) -> f (Ur (Ur p))
+  R -> \(Ur p) -> Ur (Ur p)
 
 contraction :: (Prop p, Prop q) => (Ur p ⊸ Ur p ⊸ q) ⊸ Ur p ⊸ q
-contraction = unsafePar \case
-  L -> \ab@(a, _) -> (a, ab)
-  R -> \x -> unsafePar \case
-    L -> \y -> No \f -> parL (parR x (Ur f)) != Nofun y (Ur f)
-    R -> \urp -> parR (parR x urp) urp
+contraction = par \case
+  L -> \(Ur p, nq) -> (Ur p, (Ur p, nq))
+  R -> \x -> par \case
+    L -> \nq -> No \(Ur p) -> parL (parR x (Ur p)) nq != Ur p
+    R -> \(Ur p) -> parR (parR x (Ur p)) (Ur p)
 
 -- | The \(?a\) or "why not?" modality.
 type role WhyNot nominal

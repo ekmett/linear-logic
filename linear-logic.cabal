@@ -12,7 +12,7 @@ library
     linear-base
   exposed-modules:
     Linear.Logic.Internal
-    Linear.Logic.Orphans
+    Linear.Logic.Ur
     Linear.Logic
   ghc-options: -Wall -fno-show-valid-hole-fits
   hs-source-dirs: src

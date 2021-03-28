@@ -42,7 +42,7 @@ module Linear.Logic
 -- primitive implication
 , Nofun(..)
 -- ! modality
-, Ur(..), No(..), no
+, Ur(..), No(..)
 , extractUr, duplicateUr
 , weakenUr, distUr
 -- ? modality
