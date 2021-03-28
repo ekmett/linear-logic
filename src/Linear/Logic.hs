@@ -12,7 +12,7 @@
 {-# language QuantifiedConstraints #-}
 {-# language RankNTypes #-}
 {-# language RoleAnnotations #-}
-{-# language Safe #-}
+{-# language Trustworthy #-}
 {-# language StandaloneDeriving #-}
 {-# language StandaloneKindSignatures #-}
 {-# language StrictData #-}
@@ -78,13 +78,14 @@ module Linear.Logic
 
 import Data.Kind
 import Data.Void
+import GHC.Types
 import Linear.Logic.Ur
 
-class (Prop (Not a), Not (Not a) ~ a) => Prop a where
+class (Prop (Not a), Not (Not a) ~ a) => Prop (a :: TYPE k) where
   -- | \(a^\bot\). The type of refutations of \(a\)
   --
   -- \(a^\bot^\bot\) = \(a\)
-  type Not a = c | c -> a
+  type Not (a :: TYPE k) = (c :: TYPE k) | c -> a
   -- | \(a\) and \(a^\bot\) together yield a contradiction.
   --
   -- @
@@ -137,9 +138,11 @@ data Y a b c where
   L :: Y a b a
   R :: Y a b b
 
+-- With can be runtime rep polymorphic
 infixr 3 &
 type role (&) nominal nominal
-newtype a & b = With (forall c. Y a b c -> c)
+type (&) :: forall i j. TYPE i -> TYPE j -> Type
+newtype a & b = With (forall k (c :: TYPE k). Y a b c -> c)
 type With = (&)
 
 -- | Introduce a @'With'/('&')@ connective.
@@ -147,9 +150,8 @@ type With = (&)
 -- @
 -- 'with' :: (forall c. 'Y' a b c -> c) %1 -> a '&' b
 -- @
-with :: (forall c. Y a b c -> c) %1 -> a & b
+with :: forall i j (a :: TYPE i) (b :: TYPE j). (forall k (c :: TYPE k). Y a b c -> c) %1 -> a & b
 with = With
-
 
 -- | Eliminate a @'With'/('&')@ connective and extract the left choice.
 --
@@ -184,9 +186,10 @@ infixr 3 *
 type (*) = (,)
 
 infixr 2 ⅋
+type (⅋) :: forall i j. TYPE i -> TYPE j -> Type
 type role (⅋) nominal nominal
 -- | \(\par\) is multiplicative disjunction.
-newtype a ⅋ b = Par (forall c. Y (Not b %1 -> a) (Not a %1 -> b) c %1 -> c)
+newtype (a :: TYPE i) ⅋ (b :: TYPE j) = Par (forall k (c :: TYPE k). Y (Not b %1 -> a) (Not a %1 -> b) c %1 -> c)
 
 type Par = (⅋)
 
@@ -195,7 +198,9 @@ type Par = (⅋)
 -- @
 -- 'par' :: (forall c. 'Y' ('Not' b %1 -> a) ('Not' a %1 -> b) c %1 -> c) %1 -> a '⅋' b
 -- @
-par :: (forall c. Y (Not b %1 -> a) (Not a %1 -> b) c %1 -> c) %1 -> a ⅋ b
+par 
+  :: forall i j (a :: TYPE i) (b :: TYPE j). 
+  (forall k (c :: TYPE k). Y (Not b %1 -> a) (Not a %1 -> b) c %1 -> c) %1 -> a ⅋ b
 par = Par
 
 -- | Eliminate a @'par'/('⅋')@ connective, given refutation of the @b@, supply proof of @a@.
