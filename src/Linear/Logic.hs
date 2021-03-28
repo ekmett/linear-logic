@@ -49,6 +49,9 @@
 -- '(,)' (or @('*')@) takes the place of the traditional \(\otimes\)
 --
 -- To use the alias for @('*')@, make sure to enable @{-# LANGUAGE NoStarIsType #-}@
+--
+-- Negative polarity connectives are 'GHC.Types.RuntimeRep' polymorphic,
+-- but only currently have 'Prop' instances defined for ''LiftedRep'
 
 module Linear.Logic
 ( Prop(Not,(!=))
@@ -80,11 +83,12 @@ import Data.Kind
 import Data.Void
 import GHC.Types
 import Linear.Logic.Ur
+import Linear.Logic.Y
 
 class (Prop (Not a), Not (Not a) ~ a) => Prop (a :: TYPE k) where
   -- | \(a^\bot\). The type of refutations of \(a\)
   --
-  -- \(a^\bot^\bot\) = \(a\)
+  -- \(a^{\bot^\bot} \) = \(a\)
   type Not (a :: TYPE k) = (c :: TYPE k) | c -> a
   -- | \(a\) and \(a^\bot\) together yield a contradiction.
   --
@@ -99,6 +103,7 @@ class (Prop (Not a), Not (Not a) ~ a) => Prop (a :: TYPE k) where
 instance Prop () where
   type Not () = Bot
   () != Bot b = b
+  {-# inline (!=) #-}
 
 -- | The unit for additive disjunction, \(\texttt{Void}\)
 --
@@ -106,6 +111,7 @@ instance Prop () where
 instance Prop Void where
   type Not Void = Top
   (!=) = \case
+  {-# inline (!=) #-}
 
 -- | 'Top' can hold any unwanted environment, which allows it to work
 -- as a unit for @('&')@.
@@ -123,6 +129,7 @@ data Bot where
 instance Prop Top where
   type Not Top = Void
   t != v = (\case) v t
+  {-# inline (!=) #-}
 
 -- | The unit for multiplicative disjunction, \(\bot\)
 --
@@ -130,13 +137,16 @@ instance Prop Top where
 instance Prop Bot where
   type Not Bot = ()
   Bot a != () = a
+  {-# inline (!=) #-}
 
+{-
 -- | Used to request a given side from 'With' or 'Par'.
 type role Y nominal nominal nominal
 type Y :: i -> j -> k -> Type
 data Y a b c where
   L :: Y a b a
   R :: Y a b b
+-}
 
 -- With can be runtime rep polymorphic
 infixr 3 &
@@ -147,32 +157,52 @@ type With = (&)
 
 -- | Introduce a @'With'/('&')@ connective.
 --
+-- Usage:
+--
+-- @
+-- 'with' \case
+--   'L' -> ...
+--   'R' -> ...
+-- @
+--
 -- @
 -- 'with' :: (forall c. 'Y' a b c -> c) %1 -> a '&' b
 -- @
 with :: forall i j (a :: TYPE i) (b :: TYPE j). (forall k (c :: TYPE k). Y a b c -> c) %1 -> a & b
 with = With
+{-# inline with #-}
 
 -- | Eliminate a @'With'/('&')@ connective and extract the left choice.
+--
+-- @
+-- 'withL' ('with' \case 'L' -> x; 'R' -> y) ≡ x
+-- @
 --
 -- @
 -- 'withL' :: a '&' b %1 -> a
 -- @
 withL :: a & b %1 -> a
 withL (With f) = f L
+{-# inline withL #-}
 
 -- | Eliminate a 'With'/('&') connective and extract the right choice.
+--
+-- @
+-- 'withR' ('with' \case 'L' -> x; 'R' -> y) ≡ y
+-- @
 --
 -- @
 -- 'withR' :: a '&' b %1 -> b
 -- @
 withR :: a & b %1 -> b
 withR (With f) = f R
+{-# inline withR #-}
 
 instance (Prop a, Prop b) => Prop (a & b) where
   type Not (a & b) = Not a + Not b
   w != Left a = withL w != a
   w != Right b = withR w != b
+  {-# inline (!=) #-}
 
 infixr 2 +
 type (+) = Either
@@ -181,6 +211,7 @@ instance (Prop a, Prop b) => Prop (Either a b) where
   type Not (Either a b) = Not a & Not b
   Left a != w = a != withL w
   Right a != w = a != withR w
+  {-# inline (!=) #-}
 
 infixr 3 *
 type (*) = (,)
@@ -189,35 +220,67 @@ infixr 2 ⅋
 type (⅋) :: forall i j. TYPE i -> TYPE j -> Type
 type role (⅋) nominal nominal
 -- | \(\par\) is multiplicative disjunction.
-newtype (a :: TYPE i) ⅋ (b :: TYPE j) = Par (forall k (c :: TYPE k). Y (Not b %1 -> a) (Not a %1 -> b) c %1 -> c)
+newtype (a :: TYPE i) ⅋ (b :: TYPE j) = Par (forall k (c :: TYPE k). Y (Not b %1 -> a) (Not a %1 -> b) c -> c)
 
 type Par = (⅋)
 
 -- | Introduce a @'par'/('⅋')@ connective.
 --
+-- Usage:
+--
+-- @
+-- 'par' \case
+--   'L' -> ...
+--   'R' -> ...
+-- @
+--
+-- When developing using holes, you may want to temporarily substitute 'Linear.Logic.Unsafe.unsafePar'
+-- until all the holes have been solved, then putting this in instead once everything typechecks.
+--
 -- @
 -- 'par' :: (forall c. 'Y' ('Not' b %1 -> a) ('Not' a %1 -> b) c %1 -> c) %1 -> a '⅋' b
 -- @
-par 
+par
   :: forall i j (a :: TYPE i) (b :: TYPE j). 
-  (forall k (c :: TYPE k). Y (Not b %1 -> a) (Not a %1 -> b) c %1 -> c) %1 -> a ⅋ b
+  (forall k (c :: TYPE k). Y (Not b %1 -> a) (Not a %1 -> b) c -> c) %1 -> a ⅋ b
 par = Par
+{-# inline par #-}
 
 -- | Eliminate a @'par'/('⅋')@ connective, given refutation of the @b@, supply proof of @a@.
+--
+-- @
+-- 'parL' ('par' \case 'L' -> x; 'R' -> y) ≡ x
+-- @
+--
+-- @
+-- 'parL' :: a '⅋' b %1 -> 'Not' b %1 -> a
+-- @
 parL :: a ⅋ b %1 -> Not b %1 -> a
 parL (Par p) = p L
+{-# inline parL #-}
 
 -- | Eliminate a @'par'/('⅋')@ connective, given refutation of the @a@, supply proof of @b@.
+--
+-- @
+-- parR (par \case L -> x; R -> y) ≡ y
+-- @
+--
+-- @
+-- 'parR' :: a '⅋' b %1 -> 'Not' a %1 -> b
+-- @
 parR :: a ⅋ b %1 -> Not a %1 -> b
 parR (Par p) = p R
+{-# inline parR #-}
 
 instance (Prop a, Prop b) => Prop (a * b) where
   type Not (a * b) = Not a ⅋ Not b
   (a, b) != p = a != parL p b
+  {-# inline (!=) #-}
 
 instance (Prop a, Prop b) => Prop (a ⅋ b) where
   type Not (a ⅋ b) = Not a * Not b
   p != (na, nb) = parR p na != nb
+  {-# inline (!=) #-}
 
 -- | This instance is for @(a %1 -> b)@ despite haddock's lies.
 -- The injective type family on @Not@ forces me to use a flexible
@@ -225,6 +288,7 @@ instance (Prop a, Prop b) => Prop (a ⅋ b) where
 instance (Prop a, Prop b) => Prop (a %1 -> b) where
   type Not (a %1 -> b) = Nofun a b
   f != Nofun a nb = f a != nb
+  {-# inline (!=) #-}
 
 -- | The refutation of a linear haskell arrow.
 data Nofun a b = Nofun a (Not b)
@@ -237,8 +301,9 @@ deriving stock instance (Ord a, Ord (Not b)) => Ord (Nofun a b)
 instance (Prop a, Prop b) => Prop (Nofun a b) where
   type Not (Nofun a b) = a %1 -> b
   Nofun a nb != f = f a != nb
+  {-# inline (!=) #-}
 
--- | \(\multimap\) is defined in terms of \(\parr\)
+-- | \(\multimap\) is defined in terms of \(⅋\)
 type p ⊸ q = Not p ⅋ q
 infixr 0 ⊸
 
@@ -249,6 +314,7 @@ infixr 0 ⊸
 -- @
 fun :: forall a b. Prop a => (a ⊸ b) %1 -> a %1 -> b
 fun (Par p) = p R
+{-# inline fun #-}
 
 -- | Derive a linear function for the contrapositive from a
 -- linear logic impliciation.
@@ -258,6 +324,7 @@ fun (Par p) = p R
 -- @
 unfun :: forall a b. (a ⊸ b) %1 -> Not b %1 -> Not a
 unfun (Par p) = p L
+{-# inline unfun #-}
 
 -- | Heyting negation
 newtype No a = No (forall r. a -> r)
@@ -268,11 +335,13 @@ newtype No a = No (forall r. a -> r)
 instance Prop (Ur a) where
   type Not (Ur a) = No a
   Ur a != No f = f a
+  {-# inline (!=) #-}
 
 -- | Heyting negation, used as a refutation of the exponential
 instance Prop (No a) where
   type Not (No a) = Ur a
   No f != Ur a = f a
+  {-# inline (!=) #-}
 
 {-
 funPar :: forall a b. Prop a => (a %1 -> b) %1 -> a ⊸ b
@@ -293,6 +362,7 @@ weakenUr = par \case
   R -> \p -> par \case
     L -> \q -> p != q
     R -> \Ur{} -> p
+{-# inline weakenUr #-}
 
 distUr :: forall p q. Prop p => Ur (p ⊸ q) ⊸ (Ur p ⊸ Ur q)
 distUr = par \case
@@ -300,16 +370,19 @@ distUr = par \case
   R -> \(Ur nppq) -> par \case
     L -> \(No nq) -> No \p -> nq (parR nppq p)
     R -> \(Ur p) -> Ur (parR nppq p)
+{-# inline distUr #-}
 
 extractUr :: forall p. Prop p => Ur p ⊸ p
 extractUr = par \case
   L -> \np -> No \p -> np != p
   R -> \(Ur p) -> p
+{-# inline extractUr #-}
 
 duplicateUr :: forall p. Ur p ⊸ Ur (Ur p)
 duplicateUr = par \case
   L -> \(No f) -> No \p -> f (Ur p)
   R -> \(Ur p) -> Ur (Ur p)
+{-# inline duplicateUr #-}
 
 contractUr :: (Prop p, Prop q) => (Ur p ⊸ Ur p ⊸ q) ⊸ Ur p ⊸ q
 contractUr = par \case
@@ -317,6 +390,7 @@ contractUr = par \case
   R -> \x -> par \case
     L -> \nq -> No \p -> parL (parR x (Ur p)) nq != Ur p
     R -> \(Ur p) -> parR (parR x (Ur p)) (Ur p)
+{-# inline contractUr #-}
 
 -- | The \(?a\) or "why not?" modality.
 type role WhyNot nominal
@@ -324,6 +398,7 @@ newtype WhyNot a = WhyNot (forall r. Not a %1 -> r)
 
 because :: WhyNot a %1 -> Not a %1 -> r
 because (WhyNot a) = a
+{-# inline because #-}
 
 type role Why nominal
 -- | The refutation of \(?a\)
@@ -331,21 +406,27 @@ newtype Why a = Why (Not a)
 
 why :: Why a %1 -> Not a
 why (Why x) = x
+{-# inline why #-}
 
 instance Prop a => Prop (WhyNot a) where
   type Not (WhyNot a) = Why a
   WhyNot f != Why x = f x
+  {-# inline (!=) #-}
 
 instance Prop a => Prop (Why a) where
   type Not (Why a) = WhyNot a
   Why x != WhyNot f = f x
+  {-# inline (!=) #-}
+ 
 
 returnWhyNot :: forall p. Prop p => p ⊸ WhyNot p
 returnWhyNot = par \case
   L -> \x -> why x
   R -> \p -> WhyNot (p !=)
+{-# inline returnWhyNot #-}
 
 joinWhyNot :: forall p. Prop p => WhyNot (WhyNot p) ⊸ WhyNot p
 joinWhyNot = par \case
   L -> Why
   R -> \f -> WhyNot \x -> because f (Why x)
+{-# inline joinWhyNot #-}

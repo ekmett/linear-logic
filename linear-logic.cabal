@@ -1,7 +1,56 @@
-cabal-version: 2.2
+cabal-version: 2.4
 name: linear-logic
+category: Logic
+license: BSD-2-Clause OR Apache-2.0
+license-file: LICENSE.md
+author: Edward A. Kmett
+maintainer: Edward A. Kmett <ekmett@gmail.com>
+stability: experimental
+homepage: https://github.com/ekmett/linear-logic/
+bug-reports: https://github.com/ekmett/linear-logic/issues
+copyright: Copyright 2021 Edward A. Kmett
 version: 0
 build-type: Simple
+synopsis: linear logic
+description:
+    This package provides a library for reasoning
+    with linear logic on top of linear haskell.
+    .
+    <https://arxiv.org/pdf/1805.07518.pdf Linear Logic for Constructive Mathematics>
+    by Michael Shulman provides a principled take on this topic. There he constructs
+    an embedding of an affine logic into an intuitionistic logic via a Chu construction.
+    .
+    However, that version of things was only able to express an 'affine logic' where
+    the pairs \(\top\) and @()@, \(\bot\) and @Void@ are made to coincide.
+    .
+    Reconstructing this technique on top of <https://arxiv.org/abs/1710.09756 Linear Haskell>
+    allows us to construct a full intuitionistic linear logic, while retaining Shulman's
+    style of refutation.
+    .
+    +------------------------+--------------------------+-----------------------+
+    |                        | Additive                 | Multiplicative        |
+    +========================+==========================+=======================+
+    | Conjunction            | @('&')@ w/ unit 'Top'    | @(,)@ w/ unit @()@    |
+    +------------------------+--------------------------+-----------------------+
+    | Disjunction            | 'Either' w/ unit 'Void'  | @('⅋')@ w/ unit 'Bot' |
+    +------------------------+--------------------------+-----------------------+
+    .
+    'Either' (or @('+')@) takes the place of the traditional \(\oplus\)
+    .
+    '(,)' (or @('*')@) takes the place of the traditional \(\otimes\)
+    .
+    To use the alias for @('*')@, make sure to enable @{-# LANGUAGE NoStarIsType #-}@
+    .
+    Negative polarity connectives are 'GHC.Types.RuntimeRep' polymorphic,
+    but only currently have 'Prop' instances defined for ''LiftedRep'
+
+extra-source-files:
+  CHANGELOG.md
+  README.md
+
+source-repository head
+  type: git
+  location: https://github.com/ekmett/linear-logic.git
 
 library
   default-language: Haskell2010
@@ -12,9 +61,13 @@ library
     linear-base
   other-modules:
     Linear.Logic.Ur
+    Linear.Logic.Y
   exposed-modules:
     Linear.Logic
     Linear.Logic.Functor
     Linear.Logic.Unsafe
-  ghc-options: -Wall -fno-show-valid-hole-fits
+  ghc-options:
+    -Wall -fexpose-all-unfoldings -fspecialize-aggressively
+    -fno-show-valid-hole-fits
+    -Winferred-safe-imports -Wmissing-safe-haskell-mode
   hs-source-dirs: src
