@@ -14,6 +14,8 @@
 {-# language EmptyCase #-}
 {-# language NoStarIsType #-}
 {-# language StandaloneKindSignatures #-}
+{-# language StandaloneDeriving #-}
+{-# language DerivingStrategies #-}
 {-# language RankNTypes #-}
 {-# language ScopedTypeVariables #-}
 {-# language KindSignatures #-}
@@ -27,29 +29,32 @@
 {-# language LinearTypes #-}
 {-# language GADTs #-}
 
--- <https://arxiv.org/pdf/1805.07518.pdf linear logic for constructive mathematics>
--- by Michael Shulman provides a principled take on this topic. This is a less
--- principled take, based on trying to get it to work with stock linear haskell
-
 module Linear.Logic.Internal where
 
 import Data.Functor.Contravariant
 import Data.Kind
 import Data.Void
-import GHC.Types
 import Data.Unrestricted.Linear
 import Linear.Logic.Orphans ()
 import Prelude hiding (Functor)
 import Unsafe.Linear as Unsafe
 
 class (Prop (Not a), Not (Not a) ~ a) => Prop a where
+  -- | \(a^\bot\). The type of refutations of \(a\)
   type Not a = c | c -> a
+  -- | \(a\) and \(a^\bot\) together yield a contradiction.
   (!=) :: a %1 -> Not a %1 -> r
 
+-- | The unit for multiplicative conjunction, \(\texttt{()}\)
+--
+-- \(\texttt{()}^\bot\) ≡ \(\bot\)
 instance Prop () where
   type Not () = Bot
   () != Bot b = b
 
+-- | The unit for additive disjunction, \(\texttt{Void}\)
+--
+-- \(\texttt{Void}^\bot\) ≡ \(\top\)
 instance Prop Void where
   type Not Void = Top
   (!=) = \case
@@ -60,10 +65,16 @@ data Top where
 data Bot where
   Bot :: (forall a. a) %1 -> Bot
 
+-- | The unit for additive conjunction, \(\top\)
+--
+-- \(\top^\bot\) ≡ \(\texttt{Void}\)
 instance Prop Top where
   type Not Top = Void
   t != v = (\case) v t
 
+-- | The unit for multiplicative disjunction, \(\bot\)
+--
+-- \(\bot^\bot\) ≡ \(\texttt{()}\)
 instance Prop Bot where
   type Not Bot = ()
   Bot a != () = a
@@ -107,6 +118,7 @@ type (*) = (,)
 
 infixr 2 ⅋
 type role (⅋) nominal nominal
+-- | \(\par\) is multiplicative disjunction.
 newtype a ⅋ b = Par (forall c. Y (Not b %1 -> a) (Not a %1 -> b) c %1 -> c)
 
 type Par = (⅋)
@@ -147,18 +159,27 @@ instance (Prop a, Prop b) => Prop (a ⅋ b) where
 -- Not (p ⊸ q) = Not (Not p ⅋ q) = (p, Not q)
 -- Not (p, Not q) = Not p ⅋ q = p ⊸ q
   
-instance (Prop a, Prop b) => Prop (a %'One -> b) where
-  type Not (FUN 'One a b) = Nofun a b
+-- | This instance is for @(a %1 -> b)@ despite haddock's lies.
+-- The injective type family on @Not@ forces me to use a flexible
+-- instance, rather than have the instance self-improve
+instance (Prop a, Prop b) => Prop (a %1 -> b) where
+  type Not (a %1 -> b) = Nofun a b
   f != Nofun a nb = f a != nb
 
 data Nofun a b = Nofun a (Not b)
+
+deriving stock instance (Show a, Show (Not b)) => Show (Nofun a b)
+deriving stock instance (Read a, Read (Not b)) => Read (Nofun a b)
+deriving stock instance (Eq a, Eq (Not b)) => Eq (Nofun a b)
+deriving stock instance (Ord a, Ord (Not b)) => Ord (Nofun a b)
 
 instance (Prop a, Prop b) => Prop (Nofun a b) where
   type Not (Nofun a b) = a %1 -> b
   Nofun a nb != f = f a != nb
 
-infixr 0 ⊸
+-- | \(\multimap\) is defined in terms of \(\parr\)
 type p ⊸ q = Not p ⅋ q
+infixr 0 ⊸
 
 fun :: forall a b. Prop a => (a ⊸ b) %1 -> a %1 -> b
 fun (Par p) = p R
@@ -166,7 +187,7 @@ fun (Par p) = p R
 unfun :: forall a b. (a ⊸ b) %1 -> Not b %1 -> Not a
 unfun (Par p) = p L
 
--- heyting negation
+-- | Heyting negation
 newtype No a = No { runNo :: forall r. a -> r }
 
 no :: No a -> a %1 -> r
@@ -175,10 +196,14 @@ no (No f) = Unsafe.toLinear f
 instance Contravariant No where
   contramap f (No g) = No (g . f)
 
+-- | The exponential, or unrestricted modality, \( !a \)
+--
+-- This embeds arbitrary non-linear Haskell values into 'Prop'.
 instance Prop (Ur a) where
   type Not (Ur a) = No a
   Ur a != No f = f a
 
+-- | Heyting negation, used as a refutation of the exponential
 instance Prop (No a) where
   type Not (No a) = Ur a 
   No f != Ur a = f a
@@ -223,7 +248,7 @@ contraction = unsafePar \case
     L -> \y -> No \f -> parL (parR x (Ur f)) != Nofun y (Ur f)
     R -> \urp -> parR (parR x urp) urp
 
--- ? modality
+-- | The \(?a\) or "why not?" modality.
 type role WhyNot nominal
 newtype WhyNot a = WhyNot (forall r. Not a %1 -> r)
 
@@ -231,6 +256,7 @@ because :: WhyNot a %1 -> Not a %1 -> r
 because (WhyNot a) = a
 
 type role Why nominal
+-- | The refutation of \(?a\)
 newtype Why a = Why (Not a)
 
 why :: Why a %1 -> Not a
