@@ -260,19 +260,19 @@ unfun :: forall a b. (a ⊸ b) %1 -> Not b %1 -> Not a
 unfun (Par p) = p L
 
 -- | Heyting negation
-newtype No a = No (forall r. Ur a %1 -> r)
+newtype No a = No (forall r. a -> r)
 
 -- | The exponential, or unrestricted modality, \( !a \)
 --
 -- This embeds arbitrary non-linear Haskell values into 'Prop'.
 instance Prop (Ur a) where
   type Not (Ur a) = No a
-  a != No f = f a
+  Ur a != No f = f a
 
 -- | Heyting negation, used as a refutation of the exponential
 instance Prop (No a) where
   type Not (No a) = Ur a
-  No f != a = f a
+  No f != Ur a = f a
 
 {-
 funPar :: forall a b. Prop a => (a %1 -> b) %1 -> a ⊸ b
@@ -296,26 +296,26 @@ weakenUr = par \case
 
 distUr :: forall p q. Prop p => Ur (p ⊸ q) ⊸ (Ur p ⊸ Ur q)
 distUr = par \case
-  L -> \(Ur p, No nq) -> No \(Ur nppq) -> nq (Ur (parR nppq p))
+  L -> \(Ur p, No nq) -> No \nppq -> nq (parR nppq p)
   R -> \(Ur nppq) -> par \case
-    L -> \(No nq) -> No \(Ur p) -> nq (Ur (parR nppq p))
+    L -> \(No nq) -> No \p -> nq (parR nppq p)
     R -> \(Ur p) -> Ur (parR nppq p)
 
 extractUr :: forall p. Prop p => Ur p ⊸ p
 extractUr = par \case
-  L -> \np -> No \(Ur p) -> np != p
+  L -> \np -> No \p -> np != p
   R -> \(Ur p) -> p
 
 duplicateUr :: forall p. Ur p ⊸ Ur (Ur p)
 duplicateUr = par \case
-  L -> \(No f) -> No \(Ur p) -> f (Ur (Ur p))
+  L -> \(No f) -> No \p -> f (Ur p)
   R -> \(Ur p) -> Ur (Ur p)
 
 contractUr :: (Prop p, Prop q) => (Ur p ⊸ Ur p ⊸ q) ⊸ Ur p ⊸ q
 contractUr = par \case
   L -> \(Ur p, nq) -> (Ur p, (Ur p, nq))
   R -> \x -> par \case
-    L -> \nq -> No \(Ur p) -> parL (parR x (Ur p)) nq != Ur p
+    L -> \nq -> No \p -> parL (parR x (Ur p)) nq != Ur p
     R -> \(Ur p) -> parR (parR x (Ur p)) (Ur p)
 
 -- | The \(?a\) or "why not?" modality.
