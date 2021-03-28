@@ -10,9 +10,9 @@ library
     contravariant,
     ghc-prim,
     linear-base
-  exposed-modules:
-    Linear.Logic.Internal
+  other-modules:
     Linear.Logic.Ur
+  exposed-modules:
     Linear.Logic
   ghc-options: -Wall -fno-show-valid-hole-fits
   hs-source-dirs: src
