@@ -73,7 +73,7 @@ module Linear.Logic
 , weakenUr, distUr
 , contractUr
 -- ? modality
-, WhyNot(..), because, Why(..), why
+, WhyNot(..), because, whyNot, Why(..), why, runWhy
 , returnWhyNot, joinWhyNot
 -- Internals
 , Y(..)
@@ -396,6 +396,9 @@ contractUr = par \case
 type role WhyNot nominal
 newtype WhyNot a = WhyNot (forall r. Not a %1 -> r)
 
+whyNot :: (forall r. Not a %1 -> r) %1 -> WhyNot a
+whyNot f = WhyNot f
+
 because :: WhyNot a %1 -> Not a %1 -> r
 because (WhyNot a) = a
 {-# inline because #-}
@@ -404,9 +407,12 @@ type role Why nominal
 -- | The refutation of \(?a\)
 newtype Why a = Why (Not a)
 
-why :: Why a %1 -> Not a
-why (Why x) = x
-{-# inline why #-}
+runWhy :: Why a %1 -> Not a
+runWhy (Why x) = x
+{-# inline runWhy #-}
+
+why :: Not a %1 -> Why a
+why = Why
 
 instance Prop a => Prop (WhyNot a) where
   type Not (WhyNot a) = Why a
@@ -421,7 +427,7 @@ instance Prop a => Prop (Why a) where
 
 returnWhyNot :: forall p. Prop p => p ⊸ WhyNot p
 returnWhyNot = par \case
-  L -> \x -> why x
+  L -> \x -> runWhy x
   R -> \p -> WhyNot (p !=)
 {-# inline returnWhyNot #-}
 

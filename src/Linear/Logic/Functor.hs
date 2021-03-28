@@ -26,26 +26,61 @@
 
 module Linear.Logic.Functor
 ( Functor(..)
+, Contravariant(..)
 , Bifunctor(..)
 , Monoidal(..)
 , SymmetricMonoidal(..)
+-- , Not1(..)
 ) where
 
 import Data.Void
 import Data.Kind
 import Linear.Logic
 import Prelude hiding (Functor)
--- import Unsafe.Linear as Unsafe
 
-class (forall a. Prop a => Prop (f a)) => Functor f where
+-- import Linear.Logic.Unsafe
+-- type family Not1 f :: Type -> Type
+-- type instance Not1 Ur = No
+-- type instance Not1 No = Ur
+-- type instance Not1 WhyNot = Why
+-- type instance Not1 Why = WhyNot
+
+class
+  ( forall a. Prop a => Prop (f a)
+  --, forall a. Prop a => Contravariant (Not1 f)
+  --, Not1 (Not1 f) ~ f
+  ) => Functor f where
   fmap :: (Prop a, Prop b) => (a ⊸ b) -> f a ⊸ f b
 
-{-
 instance Functor Ur where
   fmap f = par \case
-    L -> _ -- \nob -> _ -- No \a -> _
-    R -> _
--}
+    L -> \(No cb) -> No \a -> cb (fun f a)
+    R -> \(Ur a) -> Ur (fun f a)
+  {-# inline fmap #-}
+
+instance Functor WhyNot where
+  fmap f = par \case
+    L -> \nb -> why (unfun f (runWhy nb))
+    R -> \na2v -> whyNot \nb -> because na2v (unfun f nb)
+  {-# inline fmap #-}
+
+instance Contravariant Why where
+  contramap f = par \case
+    L -> \na2v -> whyNot \nb -> because na2v (unfun f nb)
+    R -> \nb -> why (unfun f (runWhy nb))
+
+class
+  ( forall a. Prop a => Prop (f a)
+  -- , forall a. Prop a => Functor (Not (f a))
+  -- Not1 (Not1 f) ~ f
+  ) => Contravariant f where
+  contramap :: (Prop a, Prop b) => (a ⊸ b) -> f b ⊸ f a
+
+instance Contravariant No where
+  contramap f = par \case
+    L -> \(Ur a) -> Ur (fun f a)
+    R -> \(No cb) -> No \a -> cb (fun f a)
+  {-# inline contramap #-}
 
 instance Prop x => Functor ((*) x) where
   fmap f = par \case
@@ -53,6 +88,7 @@ instance Prop x => Functor ((*) x) where
       L -> \a -> parL nxpnb (fun f a)
       R -> \x -> unfun f (parR nxpnb x)
     R -> \(x, a) -> (x, fun f a)
+  {-# inline fmap #-}
 
 -- prop data bifunctor
 class
