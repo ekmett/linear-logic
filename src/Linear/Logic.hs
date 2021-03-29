@@ -279,20 +279,20 @@ parR :: a ⅋ b %1 -> Not a %1 -> b
 parR (Par p) = p R
 {-# inline parR #-}
 
-instance (Prop a, Prop b) => Prop (a * b) where
+instance (Prep a, Prop b) => Prop (a * b) where
   type Not (a * b) = Not a ⅋ Not b
-  (a, b) != p = a != parL p b
+  (a, b) != p = parR p a != b
   {-# inline (!=) #-}
 
-instance (Prop a, Prop b) => Prop (a ⅋ b) where
+instance (Prep a, Prop b) => Prop (a ⅋ b) where
   type Not (a ⅋ b) = Not a * Not b
-  p != (na, nb) = parR p na != nb
+  p != (a, b) = parR p a != b
   {-# inline (!=) #-}
 
 -- | This instance is for @(a %1 -> b)@ despite haddock's lies.
 -- The injective type family on @Not@ forces me to use a flexible
 -- instance, rather than have the instance self-improve
-instance (Prop a, Prop b) => Prop (a %1 -> b) where
+instance (Prep a, Prop b) => Prop (a %1 -> b) where
   type Not (a %1 -> b) = Nofun a b
   f != Nofun a nb = f a != nb
   {-# inline (!=) #-}
@@ -305,34 +305,39 @@ deriving stock instance (Read a, Read (Not b)) => Read (Nofun a b)
 deriving stock instance (Eq a, Eq (Not b)) => Eq (Nofun a b)
 deriving stock instance (Ord a, Ord (Not b)) => Ord (Nofun a b)
 
-instance (Prop a, Prop b) => Prop (Nofun a b) where
+instance (Prep a, Prop b) => Prop (Nofun a b) where
   type Not (Nofun a b) = a %1 -> b
   Nofun a nb != f = f a != nb
   {-# inline (!=) #-}
 
--- | \(\multimap\) is defined in terms of \(⅋\)
+-- | \(\multimap\) could be defined in terms of \(⅋\), but they I couldn't hang instances off it.
+--
+-- As an additional benefit. I could hang the proof of Prop in Lol, and then by bifunctors might get away
+-- with less proof burden.
+--
 -- type p ⊸ q = Not p ⅋ q
 infixr 0 ⊸
 
 newtype (a :: TYPE i) ⊸ (b :: TYPE j) = Lol (forall k (c :: TYPE k). Y (Not b %1 -> Not a) (a %1 -> b) c -> c)
 
-lol 
+lol
   :: forall i j (a :: TYPE i) (b :: TYPE j).
      (forall k (c :: TYPE k). Y (Not b %1 -> Not a) (a %1 -> b) c -> c) %1
   -> a ⊸ b
 lol = Lol
 
-instance (Prop a, Prop b) => Prop (a ⊸ b) where
+instance (Prep a, Prop b) => Prop (a ⊸ b) where
   type Not (a ⊸ b) = a # b
   f != (a :# nb) = fun f a != nb
 
-instance (Prop a, Prop b) => Prop (a # b) where
+instance (Prep a, Prop b) => Prop (a # b) where
   type Not (a # b) = a ⊸ b
   (a :# nb) != f = fun f a != nb
 
+-- 
 data a # b = a :# Not b
 
-infixr 3 :#
+infixr 3 :#, #
 
 deriving stock instance (Show a, Show (Not b)) => Show (a # b)
 deriving stock instance (Read a, Read (Not b)) => Read (a # b)
@@ -358,10 +363,10 @@ fun :: (a ⊸ b) %1 -> a %1 -> b
 fun (Lol f) = f R
 {-# inline fun #-}
 
-lolPar :: forall a b. Not (Not a) ~ a => (a ⊸ b) %1 -> Not a ⅋ b
+lolPar :: forall a b. Prep a => (a ⊸ b) %1 -> Not a ⅋ b
 lolPar (Lol f) = Par f
 
-parLol :: forall a b. Not (Not a) ~ a => Not a ⅋ b %1 -> a ⊸ b
+parLol :: forall a b. Prep a => Not a ⅋ b %1 -> a ⊸ b
 parLol (Par f) = Lol f
 
 -- | Heyting negation
@@ -400,7 +405,7 @@ weakenUr = lol \case
     R -> \Ur{} -> p
 {-# inline weakenUr #-}
 
-distUr :: forall p q. Prop p => Ur (p ⊸ q) ⊸ (Ur p ⊸ Ur q)
+distUr :: forall p q. Ur (p ⊸ q) ⊸ (Ur p ⊸ Ur q)
 distUr = lol \case
   L -> \(Ur p :# No nq) -> No \nppq -> nq (fun nppq p)
   R -> \(Ur nppq) -> lol \case
@@ -420,7 +425,7 @@ duplicateUr = lol \case
   R -> \(Ur p) -> Ur (Ur p)
 {-# inline duplicateUr #-}
 
-contractUr :: (Prop p, Prop q) => (Ur p ⊸ Ur p ⊸ q) ⊸ Ur p ⊸ q
+contractUr :: Prop q => (Ur p ⊸ Ur p ⊸ q) ⊸ Ur p ⊸ q
 contractUr = lol \case
   L -> \(Ur p :# nq) -> (Ur p :# (Ur p :# nq))
   R -> \x -> lol \case
@@ -450,12 +455,12 @@ runWhy (Why x) = x
 why :: Not a %1 -> Why a
 why = Why
 
-instance Prop a => Prop (WhyNot a) where
+instance Prop (WhyNot a) where
   type Not (WhyNot a) = Why a
   WhyNot f != Why x = f x
   {-# inline (!=) #-}
 
-instance Prop a => Prop (Why a) where
+instance Prop (Why a) where
   type Not (Why a) = WhyNot a
   Why x != WhyNot f = f x
   {-# inline (!=) #-}
@@ -466,7 +471,7 @@ returnWhyNot = lol \case
   R -> \p -> WhyNot (p !=)
 {-# inline returnWhyNot #-}
 
-joinWhyNot :: forall p. Prop p => WhyNot (WhyNot p) ⊸ WhyNot p
+joinWhyNot :: forall p. WhyNot (WhyNot p) ⊸ WhyNot p
 joinWhyNot = lol \case
   L -> Why
   R -> \f -> WhyNot \x -> because f (Why x)

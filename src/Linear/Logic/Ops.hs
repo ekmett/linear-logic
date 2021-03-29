@@ -12,6 +12,21 @@ module Linear.Logic.Ops where
 
 import Linear.Logic
 
+{-
+class FromIso f => FromFun f where
+  fun :: With (a %1 -> b) (Not b %1 -> Not a) -> f a b
+
+--instance FromFun (a %1 -> b)
+--instance FromFun (a ⊸ b)
+
+class FromIso f where
+  iso :: With (a ⊸ b) (b ⊸ a) -> f a b
+
+--instance FromFun (a %1 -> b)
+--instance FromFun (a ⊸ b)
+--instance FromFun (a ⧟ b)
+-}
+
 contra :: (Prep p, Prep q) => p ⊸ q %1 -> Not q ⊸ Not p
 contra = \apb -> lol \case
   L -> \na -> fun apb na
