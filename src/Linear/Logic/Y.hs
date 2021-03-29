@@ -58,11 +58,11 @@ type Y :: i -> j -> k -> TYPE 'IntRep
 type role Y nominal nominal nominal
 newtype Y a b c = Y Int#
 
-pattern L :: forall i j k (a :: i) (b :: j) (c :: k). () => (a ~~ c) => Y a b c
+pattern L :: forall i j k (a :: i) (b :: j) (c :: k). () => a ~~ c => Y a b c
 pattern L <- (upY -> L') where
   L = Y 0#
 
-pattern R :: forall i j k (a :: i) (b :: j) (c :: k). () => (b ~~ c) => Y a b c
+pattern R :: forall i j k (a :: i) (b :: j) (c :: k). () => b ~~ c => Y a b c
 pattern R <- (upY -> R') where
   R = Y 1#
 

@@ -1,4 +1,5 @@
 {-# language BlockArguments #-}
+{-# language ConstraintKinds #-}
 {-# language DerivingStrategies #-}
 {-# language EmptyCase #-}
 {-# language ExplicitNamespaces #-}
@@ -54,7 +55,8 @@
 -- but only currently have 'Prop' instances defined for ''LiftedRep'
 
 module Linear.Logic
-( Prop(Not,(!=))
+( Prep
+, Prop(Not,(!=))
 -- additive conjunction, with
 , type (&)(..), Top(..), type With, with, withL, withR
 -- additive disjunction, oplus
@@ -64,7 +66,7 @@ module Linear.Logic
 -- multiplciative disjunction, par
 , type (⅋)(..), Bot(..), type Par, par, parL, parR
 -- refutable "lollipop" implication
-, type (⊸), fun, unfun
+, type (⊸)(..), lol, fun, unfun, lolPar, parLol
 -- primitive implication
 , Nofun(..)
 -- ! modality
@@ -85,7 +87,10 @@ import GHC.Types
 import Linear.Logic.Ur
 import Linear.Logic.Y
 
-class (Prop (Not a), Not (Not a) ~ a) => Prop (a :: TYPE k) where
+-- not is merely involutive. used to avoid passing dictionaries when they aren't used
+type Prep a = Not (Not a) ~ a
+
+class (Prop (Not a), Prep a) => Prop (a :: TYPE k) where
   -- | \(a^\bot\). The type of refutations of \(a\)
   --
   -- \(a^{\bot^\bot} \) = \(a\)
@@ -152,7 +157,9 @@ data Y a b c where
 infixr 3 &
 type role (&) nominal nominal
 type (&) :: forall i j. TYPE i -> TYPE j -> Type
+
 newtype a & b = With (forall k (c :: TYPE k). Y a b c -> c)
+
 type With = (&)
 
 -- | Introduce a @'With'/('&')@ connective.
@@ -304,17 +311,33 @@ instance (Prop a, Prop b) => Prop (Nofun a b) where
   {-# inline (!=) #-}
 
 -- | \(\multimap\) is defined in terms of \(⅋\)
-type p ⊸ q = Not p ⅋ q
+-- type p ⊸ q = Not p ⅋ q
 infixr 0 ⊸
 
--- | Derive a linear function from a linear logic impliciation.
---
--- @
--- 'fun' :: forall a b. 'Prop' a => (a '⊸' b) %1 -> a %1 -> b
--- @
-fun :: forall a b. Prop a => (a ⊸ b) %1 -> a %1 -> b
-fun (Par p) = p R
-{-# inline fun #-}
+newtype (a :: TYPE i) ⊸ (b :: TYPE j) = Lol (forall k (c :: TYPE k). Y (Not b %1 -> Not a) (a %1 -> b) c -> c)
+
+lol 
+  :: forall i j (a :: TYPE i) (b :: TYPE j).
+     (forall k (c :: TYPE k). Y (Not b %1 -> Not a) (a %1 -> b) c -> c) %1
+  -> a ⊸ b
+lol = Lol
+
+instance (Prop a, Prop b) => Prop (a ⊸ b) where
+  type Not (a ⊸ b) = a # b
+  f != (a :# nb) = fun f a != nb
+
+instance (Prop a, Prop b) => Prop (a # b) where
+  type Not (a # b) = a ⊸ b
+  (a :# nb) != f = fun f a != nb
+
+data a # b = a :# Not b
+
+infixr 3 :#
+
+deriving stock instance (Show a, Show (Not b)) => Show (a # b)
+deriving stock instance (Read a, Read (Not b)) => Read (a # b)
+deriving stock instance (Eq a, Eq (Not b)) => Eq (a # b)
+deriving stock instance (Ord a, Ord (Not b)) => Ord (a # b)
 
 -- | Derive a linear function for the contrapositive from a
 -- linear logic impliciation.
@@ -322,9 +345,24 @@ fun (Par p) = p R
 -- @
 -- 'unfun' :: forall a b. 'Prop' a => (a '⊸' b) %1 -> a %1 -> b
 -- @
-unfun :: forall a b. (a ⊸ b) %1 -> Not b %1 -> Not a
-unfun (Par p) = p L
+unfun :: (a ⊸ b) %1 -> Not b %1 -> Not a
+unfun (Lol f) = f L
 {-# inline unfun #-}
+
+-- | Derive a linear function from a linear logic impliciation.
+--
+-- @
+-- 'fun' :: forall a b. 'Prop' a => (a '⊸' b) %1 -> a %1 -> b
+-- @
+fun :: (a ⊸ b) %1 -> a %1 -> b
+fun (Lol f) = f R
+{-# inline fun #-}
+
+lolPar :: forall a b. Not (Not a) ~ a => (a ⊸ b) %1 -> Not a ⅋ b
+lolPar (Lol f) = Par f
+
+parLol :: forall a b. Not (Not a) ~ a => Not a ⅋ b %1 -> a ⊸ b
+parLol (Par f) = Lol f
 
 -- | Heyting negation
 newtype No a = No (forall r. a -> r)
@@ -345,11 +383,9 @@ instance Prop (No a) where
 
 {-
 funPar :: forall a b. Prop a => (a %1 -> b) %1 -> a ⊸ b
-funPar = Unsafe.toLinear go where
-  go :: (a %1 -> b) -> Not a ⅋ b
-  go f = Par $ With \case
-    R -> f
-    L -> _ -- impossible as expected
+funPar = par \case
+  R -> f
+  L -> _ -- impossible as expected
 -}
 
 -- |
@@ -357,39 +393,39 @@ funPar = Unsafe.toLinear go where
 -- 'weakenUr' :: forall p q. 'Prop' p => p ⊸ ('Ur' q ⊸ p)
 -- @
 weakenUr :: forall p q. Prop p => p ⊸ (Ur q ⊸ p)
-weakenUr = par \case
-  L -> \(Ur{}, np) -> np
-  R -> \p -> par \case
+weakenUr = lol \case
+  L -> \(Ur{} :# np) -> np
+  R -> \p -> lol \case
     L -> \q -> p != q
     R -> \Ur{} -> p
 {-# inline weakenUr #-}
 
 distUr :: forall p q. Prop p => Ur (p ⊸ q) ⊸ (Ur p ⊸ Ur q)
-distUr = par \case
-  L -> \(Ur p, No nq) -> No \nppq -> nq (parR nppq p)
-  R -> \(Ur nppq) -> par \case
-    L -> \(No nq) -> No \p -> nq (parR nppq p)
-    R -> \(Ur p) -> Ur (parR nppq p)
+distUr = lol \case
+  L -> \(Ur p :# No nq) -> No \nppq -> nq (fun nppq p)
+  R -> \(Ur nppq) -> lol \case
+    L -> \(No nq) -> No \p -> nq (fun nppq p)
+    R -> \(Ur p) -> Ur (fun nppq p)
 {-# inline distUr #-}
 
 extractUr :: forall p. Prop p => Ur p ⊸ p
-extractUr = par \case
+extractUr = lol \case
   L -> \np -> No \p -> np != p
   R -> \(Ur p) -> p
 {-# inline extractUr #-}
 
 duplicateUr :: forall p. Ur p ⊸ Ur (Ur p)
-duplicateUr = par \case
+duplicateUr = lol \case
   L -> \(No f) -> No \p -> f (Ur p)
   R -> \(Ur p) -> Ur (Ur p)
 {-# inline duplicateUr #-}
 
 contractUr :: (Prop p, Prop q) => (Ur p ⊸ Ur p ⊸ q) ⊸ Ur p ⊸ q
-contractUr = par \case
-  L -> \(Ur p, nq) -> (Ur p, (Ur p, nq))
-  R -> \x -> par \case
-    L -> \nq -> No \p -> parL (parR x (Ur p)) nq != Ur p
-    R -> \(Ur p) -> parR (parR x (Ur p)) (Ur p)
+contractUr = lol \case
+  L -> \(Ur p :# nq) -> (Ur p :# (Ur p :# nq))
+  R -> \x -> lol \case
+    L -> \nq -> No \p -> unfun (fun x (Ur p)) nq != Ur p
+    R -> \(Ur p) -> fun (fun x (Ur p)) (Ur p)
 {-# inline contractUr #-}
 
 -- | The \(?a\) or "why not?" modality.
@@ -424,15 +460,14 @@ instance Prop a => Prop (Why a) where
   Why x != WhyNot f = f x
   {-# inline (!=) #-}
  
-
 returnWhyNot :: forall p. Prop p => p ⊸ WhyNot p
-returnWhyNot = par \case
+returnWhyNot = lol \case
   L -> \x -> runWhy x
   R -> \p -> WhyNot (p !=)
 {-# inline returnWhyNot #-}
 
 joinWhyNot :: forall p. Prop p => WhyNot (WhyNot p) ⊸ WhyNot p
-joinWhyNot = par \case
+joinWhyNot = lol \case
   L -> Why
   R -> \f -> WhyNot \x -> because f (Why x)
 {-# inline joinWhyNot #-}

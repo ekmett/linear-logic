@@ -65,6 +65,7 @@ library
   exposed-modules:
     Linear.Logic
     Linear.Logic.Functor
+    Linear.Logic.Ops
     Linear.Logic.Unsafe
   ghc-options:
     -Wall -fexpose-all-unfoldings -fspecialize-aggressively

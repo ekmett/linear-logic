@@ -32,24 +32,14 @@ module Linear.Logic.Functor
 , Semimonoidal(..)
 , Monoidal(..)
 , SymmetricMonoidal(..)
-, swapPar
-, swapEither
-, swapWith
-, swapTensor
-, assocPar
-, assocEither
-, assocWith
-, assocTensor
-, unassocPar
-, unassocEither
-, unassocWith
-, unassocTensor
 ) where
 
 import Data.Void
 import Data.Kind
 import Linear.Logic
+import Linear.Logic.Ops
 import Prelude hiding (Functor)
+-- import Linear.Logic.Unsafe
 
 class
   ( forall a. Prop a => Prop (f a)
@@ -57,19 +47,19 @@ class
   fmap :: (Prop a, Prop b) => (a ⊸ b) -> f a ⊸ f b
 
 instance Functor Ur where
-  fmap f = par \case
+  fmap f = lol \case
     L -> \(No cb) -> No \a -> cb (fun f a)
     R -> \(Ur a) -> Ur (fun f a)
   {-# inline fmap #-}
 
 instance Functor WhyNot where
-  fmap f = par \case
+  fmap f = lol \case
     L -> \nb -> why (unfun f (runWhy nb))
     R -> \na2v -> whyNot \nb -> because na2v (unfun f nb)
   {-# inline fmap #-}
 
 instance Prop a => Functor (Either a) where
-  fmap f = par \case
+  fmap f = lol \case
     L -> \nawnb -> with \case
       L -> withL nawnb
       R -> unfun f (withR nawnb)
@@ -78,7 +68,7 @@ instance Prop a => Functor (Either a) where
       Right x -> Right (fun f x)
 
 instance Prop x => Functor ((,) x) where
-  fmap f = par \case
+  fmap f = lol \case
     L -> \nxpnb -> par \case
       L -> \a -> parL nxpnb (fun f a)
       R -> \x -> unfun f (parR nxpnb x)
@@ -86,7 +76,7 @@ instance Prop x => Functor ((,) x) where
   {-# inline fmap #-}
 
 instance Prop p => Functor ((&) p) where
-  fmap f = par \case
+  fmap f = lol \case
     L -> \case
       Left np -> Left np
       Right nb -> Right (unfun f nb)
@@ -95,7 +85,7 @@ instance Prop p => Functor ((&) p) where
       R -> fun f (withR pwa)
 
 instance Prop a => Functor ((⅋) a) where
-  fmap f = par \case
+  fmap f = lol \case
     L -> \(na,nb) -> (na, unfun f nb)
     R -> \apa1 -> par \case
       L -> \nb -> parL apa1 (unfun f nb)
@@ -109,13 +99,13 @@ class
   contramap :: (Prop a, Prop b) => (a ⊸ b) -> f b ⊸ f a
 
 instance Contravariant No where
-  contramap f = par \case
+  contramap f = lol \case
     L -> \(Ur a) -> Ur (fun f a)
     R -> \(No cb) -> No \a -> cb (fun f a)
   {-# inline contramap #-}
 
 instance Contravariant Why where
-  contramap f = par \case
+  contramap f = lol \case
     L -> \na2v -> whyNot \nb -> because na2v (unfun f nb)
     R -> \nb -> why (unfun f (runWhy nb))
 
@@ -129,7 +119,7 @@ class
     -> t a c ⊸ t b d
 
 instance Bifunctor Either where
-  bimap f g = par \case
+  bimap f g = lol \case
     L -> \nbwnd -> with \case
       L -> unfun f (withL nbwnd)
       R -> unfun g (withR nbwnd)
@@ -138,14 +128,14 @@ instance Bifunctor Either where
       Right c -> Right (fun g c)
 
 instance Bifunctor (,) where
-  bimap f g = par \case
+  bimap f g = lol \case
     L -> \nbpnd -> par \case
       L -> \c -> unfun f (parL nbpnd (fun g c))
       R -> \a -> unfun g (parR nbpnd (fun f a))
     R -> \(a, c) -> (fun f a, fun g c)
 
 instance Bifunctor (&) where
-  bimap f g = par \case
+  bimap f g = lol \case
     L -> \case
       Left nb  -> Left  (unfun f nb)
       Right nd -> Right (unfun g nd)
@@ -154,7 +144,7 @@ instance Bifunctor (&) where
       R -> fun g (withR awc)
 
 instance Bifunctor (⅋) where
-  bimap f g = par \case
+  bimap f g = lol \case
     L -> \(nb,nd) -> (unfun f nb, unfun g nd)
     R -> \apc -> par \case
       L -> \nd -> fun f (parL apc (unfun g nd))
@@ -175,165 +165,91 @@ class Monoidal t => SymmetricMonoidal t where
   swap :: (Prop a, Prop b) => t a b ⊸ t b a
 
 instance Semimonoidal Either where
-  assoc = par \case
+  assoc = lol \case
     L -> unassocWith
     R -> assocEither
-  unassoc = swapPar assoc
+  unassoc = contra assoc
 
 instance Monoidal Either where
   type I Either = Void
-  lambda = par \case
-    L -> withR
-    R -> Right
-  unlambda = swapPar lambda
-  rho = par \case
-    L -> withL
-    R -> Left
-  unrho = swapPar rho
+  lambda = lol \case
+    L -> unlambdaWith
+    R -> lambdaEither
+  unlambda = contra lambda
+  rho = lol \case
+    L -> unrhoWith
+    R -> rhoEither
+  unrho = contra rho
 
 instance SymmetricMonoidal Either where
-  swap = par \case
+  swap = lol \case
     L -> swapWith
     R -> swapEither
 
 instance Semimonoidal (,) where
-  assoc = par \case
+  assoc = lol \case
     L -> unassocPar
     R -> assocTensor
-  unassoc = swapPar assoc
+  unassoc = contra assoc
 
 instance Monoidal (,) where
   type I (,) = ()
-  lambda = par \case
-    L -> \bpa -> parR bpa ()
-    R -> ((),)
-  unlambda = swapPar lambda
-  rho = par \case
-    L -> \apb -> parL apb ()
-    R -> (,())
-  unrho = swapPar rho
+  lambda = lol \case
+    L -> unlambdaPar
+    R -> lambdaTensor
+  unlambda = contra lambda
+  rho = lol \case
+    L -> unrhoPar 
+    R -> rhoTensor
+  unrho = contra rho
 
 instance SymmetricMonoidal (,) where
-  swap = par \case
+  swap = lol \case
     L -> swapPar
     R -> swapTensor
 
 instance Semimonoidal (&) where
-  assoc = par \case
+  assoc = lol \case
     L -> unassocEither
     R -> assocWith
-  unassoc = swapPar assoc
+  unassoc = contra assoc
 
 instance Monoidal (&) where
   type I (&) = Top
-  lambda = par \case
-    L -> \case
-      Right na -> na
-      Left v -> \case{} v
-    R -> \a -> with \case
-      L -> Top a
-      R -> a
-  unlambda = swapPar lambda
-  rho = par \case
-    L -> \case
-      Left na -> na
-      Right v -> \case{} v
-    R -> \b -> with \case
-      L -> b
-      R -> Top b
-  unrho = swapPar rho
+  lambda = lol \case
+    L -> unlambdaEither
+    R -> lambdaWith
+  unlambda = contra lambda
+  rho = lol \case
+    L -> unrhoEither
+    R -> rhoWith
+  unrho = contra rho
 
 instance SymmetricMonoidal (&) where
-  swap = par \case
+  swap = lol \case
     L -> swapEither
     R -> swapWith
 
 instance Semimonoidal (⅋) where
-  assoc = par \case
+  assoc = lol \case
     L -> unassocTensor
     R -> assocPar
-  unassoc = swapPar assoc
+  unassoc = contra assoc
 
 instance Monoidal (⅋) where
   type I (⅋) = Bot
-  lambda = par \case
-    L -> \((),na) -> na
-    R -> \a -> par \case
-      L -> \na -> a != na
-      R -> \() -> a
-  unlambda = swapPar lambda
-  rho = par \case
-    L -> \(na,()) -> na
-    R -> \b -> par \case
-      L -> \() -> b
-      R -> \nb -> b != nb
-  unrho = swapPar rho
+  lambda = lol \case
+    L -> unlambdaTensor
+    R -> lambdaPar 
+  unlambda = contra lambda
+  rho = lol \case
+    L -> unrhoTensor
+    R -> rhoPar 
+  unrho = contra rho
 
 instance SymmetricMonoidal (⅋) where
-  swap = par \case
+  swap = lol \case
     L -> swapTensor
     R -> swapPar
+  {-# inline swap #-}
 
-swapPar :: p ⅋ q %1 -> q ⅋ p
-swapPar = \apb -> par \case
-  L -> \na -> parR apb na
-  R -> \nb -> parL apb nb
-
-swapEither :: p + q %1 -> q + p
-swapEither = \case
-  Left p -> Right p
-  Right q -> Left q
-
-swapWith :: p & q %1 -> q & p
-swapWith w = with \case
-  L -> withR w
-  R -> withL w
-
-swapTensor :: (p, q) %1 -> (q, p)
-swapTensor = \(p,q) -> (q,p)
-
-assocEither :: (a + b) + c %1 -> a + (b + c)
-assocEither = \case
-  Left (Left a) -> Left a
-  Left (Right b) -> Right (Left b)
-  Right c -> Right (Right c)
-
-assocTensor :: ((a, b), c) %1 -> (a, (b, c))
-assocTensor = \((a, b), c) -> (a, (b, c))
-
-assocWith :: (a & b) & c %1 -> a & (b & c)
-assocWith = \abc -> with \case
-      L -> withL (withL abc)
-      R -> with \case
-        L -> withR (withL abc)
-        R -> withR abc
-
-assocPar :: (a ⅋ b) ⅋ c %1 -> a ⅋ (b ⅋ c)
-assocPar = \apb_c -> par \case
-  L -> \(nb, nc) -> parL (parL apb_c nc) nb
-  R -> \na -> par \case
-    L -> \nc -> parR (parL apb_c nc) na
-    R -> \nb -> parR apb_c (na,nb)
-
-unassocWith :: a & (b & c) %1 -> (a & b) & c
-unassocWith = \abc -> with \case
-  L -> with \case
-    L -> withL abc
-    R -> withL (withR abc)
-  R -> withR (withR abc)
-
-unassocPar :: a ⅋ (b ⅋ c) %1 -> (a ⅋ b) ⅋ c
-unassocPar = \a_bpc -> par \case
-  L -> \nc -> par \case
-    L -> \nb -> parL a_bpc (nb,nc)
-    R -> \na -> parL (parR a_bpc na) nc
-  R -> \(na,nb) -> parR (parR a_bpc na) nb
-
-unassocEither :: a + (b + c) %1 -> (a + b) + c
-unassocEither = \case
-  Left a -> Left (Left a)
-  Right (Left b) -> Left (Right b)
-  Right (Right c) -> Right c
-
-unassocTensor :: (a, (b, c)) %1 -> ((a, b), c)
-unassocTensor = \(na,(nb,nc)) -> ((na,nb),nc)
