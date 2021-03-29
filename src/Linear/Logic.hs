@@ -11,6 +11,7 @@
 {-# language LambdaCase #-}
 {-# language LinearTypes #-}
 {-# language NoStarIsType #-}
+{-# language ImportQualifiedPost #-}
 {-# language PolyKinds #-}
 {-# language QuantifiedConstraints #-}
 {-# language RankNTypes #-}
@@ -26,6 +27,7 @@
 {-# language TypeOperators #-}
 {-# language UndecidableInstances #-}
 {-# language UndecidableSuperClasses #-}
+{-# options_ghc -Wno-unused-imports #-} -- toLinear
 
 -- |
 -- <https://arxiv.org/pdf/1805.07518.pdf Linear Logic for Constructive Mathematics>
@@ -62,18 +64,18 @@ module Linear.Logic
 -- additive conjunction, with
 , type (&)(..), Top(..), type With, with, withL', withR', withL, withR
 -- additive disjunction, oplus
-, type (+), Void, Either(..)
+, type (+), Void, Either(..), left, right
 -- multiplicative conjunction, (,)
 , type (*) -- ()
 -- multiplciative disjunction, par
 , type (⅋)(..), Bot(..), type Par, par, parL', parR', parL, parR
 -- refutable "lollipop" implication
 , type (⊸)(..)
-, Lol(..), fun', fun, lolPar, contra, contra'
+, Lol(..), runLol, fun', fun, lolPar, contra, contra', contra''
 , type (%->)
 , type (-#>)(..)
 -- equality and apartness
-, Iso(..)
+, Iso(..), runIso
 , type (⧟)(..)
 , type (#)(..)
 -- primitive implication
@@ -88,15 +90,17 @@ module Linear.Logic
 , returnWhyNot, joinWhyNot
 -- Internals
 , Y(..)
+, linear
 ) where
 
+import Control.Category qualified as C
 import Data.Kind
 import Data.Void
 import GHC.Types
 import Prelude.Linear
-import Linear.Logic.Ur ()
+import Linear.Logic.Orphans ()
 import Linear.Logic.Y
--- import Unsafe.Coerce
+import Unsafe.Linear (toLinear)
 
 -- not is merely involutive. used to avoid passing dictionaries when they aren't used
 type Prep a = Not (Not a) ~ a
@@ -334,11 +338,33 @@ type (%->) = FUN 'One
 -- type p ⊸ q = Not p ⅋ q
 newtype a ⊸ b = Lol (forall c. Y (Not b %1 -> Not a) (a %1 -> b) c -> c)
 
-data a -#> b where
-  (:-#>) :: a %1 -> Not b %1 -> a -#> b
+data a -#> b where (:-#>) :: a %1 -> Not b %1 -> a -#> b
 infixr 3 -#>, :-#>
 
 newtype a ⧟ b = Iso (forall c. Y (b ⊸ a) (a ⊸ b) c -> c)
+
+runLol :: a ⊸ b %1 -> Y (Not b %1 -> Not a) (a %1 -> b) c -> c
+runLol (Lol f) = f
+
+runIso :: a ⧟ b %1 -> Y (b ⊸ a) (a ⊸ b) c -> c
+runIso (Iso f) = f
+
+-- | Sometimes linear haskell needs some help to infer that we really want linear usage
+linear :: (a %1 -> b) %1 -> a %1 -> b
+linear = id
+
+instance C.Category (⊸) where
+  id = Lol \case L -> id; R -> id
+  f . g = Lol \case
+    L -> linear \c -> runLol g L (runLol f L c)
+    R -> linear \a -> runLol f R (runLol g R a)
+
+instance C.Category (⧟) where
+  id = Iso \case L -> C.id; R -> C.id
+  f . g = Iso \case
+    L -> runIso g L C.. runIso f L
+    R -> runIso f R C.. runIso g R
+
 
 data a # b
   = ApartL (Not a) b
@@ -415,6 +441,7 @@ unfun (Lol f) = f L
 --
 fun' :: (a ⊸ b) %1 -> (a %1 -> b)
 fun' (Lol f) = lol f
+{-# inline fun' #-}
 
 fun :: (Lol l, Lol l') => l (a ⊸ b) (l' a b)
 fun = lol \case
@@ -431,13 +458,23 @@ lolPar = iso \case
     L -> \(a, nb) -> a :-#> nb
     R -> \(Lol f) -> Par f
 
-contra :: forall lol p q. (Lol lol, Prep p, Prep q) => p ⊸ q %1 -> lol (Not q) (Not p)
-contra = \(Lol f) -> lol \case
+contra'' :: forall l p q. (Lol l, Prep p, Prep q) => p ⊸ q %1 -> l (Not q) (Not p)
+contra'' = \(Lol f) -> lol \case
   L -> \na -> f R na
   R -> \nb -> f L nb
 
-contra' :: p ⊸ q %1 -> Not q %1 -> Not p
-contra' = \(Lol f) -> f L
+contra' :: forall l l' p q. (Lol l, Lol l', Prep p, Prep q) => l (p ⊸ q) (l' (Not q) (Not p))
+contra' = lol \case
+  L -> \nf -> apartR nf & \(p :-#> nq) -> nq :-#> p
+  R -> contra''
+
+contra :: forall iso p q. (Iso iso, Prep p, Prep q) => iso (p ⊸ q) (Not q ⊸ Not p)
+contra = iso \case
+  L -> contra'
+  R -> contra'
+
+-- contra' :: p ⊸ q %1 -> Not q %1 -> Not p
+-- contra' = \(Lol f) -> f L
 
 -- | The \(?a\) or "why not?" modality.
 type role WhyNot nominal
@@ -499,16 +536,16 @@ contractUr :: (Prep p, Prop q) => (Ur p ⊸ Ur p ⊸ q) ⊸ Ur p ⊸ q
 contractUr = lol \case
   L -> \(Ur p :-#> nq) -> (Ur p :-#> (Ur p :-#> nq))
   R -> \x -> lol \case
-    L -> \nq -> whyNot \p -> contra (fun x (Ur p)) nq != Ur p
+    L -> \nq -> whyNot \p -> contra' (fun x (Ur p)) nq != Ur p
     R -> \(Ur p) -> fun (fun x (Ur p)) (Ur p)
 {-# inline contractUr #-}
 
 returnWhyNot :: (Lol l, Prop p) => l p (WhyNot p)
-returnWhyNot = contra extractUr
+returnWhyNot = contra' extractUr
 {-# inline returnWhyNot #-}
 
 joinWhyNot :: (Lol l, Prep p) => l (WhyNot (WhyNot p)) (WhyNot p)
-joinWhyNot = contra duplicateUr
+joinWhyNot = contra' duplicateUr
 {-# inline joinWhyNot #-}
 
 withL :: Lol l => l (a & b) a
@@ -520,6 +557,16 @@ withR :: Lol l => l (a & b) b
 withR = lol \case
   L -> Right
   R -> withR'
+
+left :: Lol l => l a (a + b)
+left = lol \case
+  L -> withL'
+  R -> Left
+
+right :: Lol l => l b (a + b)
+right = lol \case
+  L -> withR'
+  R -> Right
 
 parR :: (Lol l, Lol l', Prep a) => l (a ⅋ b) (l' (Not a) b)
 parR = lol \case
@@ -534,3 +581,4 @@ parL = lol \case
   R -> \p -> lol \case
     L -> parR' p
     R -> parL' p
+

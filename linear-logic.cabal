@@ -59,14 +59,13 @@ library
     contravariant,
     ghc-prim,
     linear-base
-  other-modules:
-    Linear.Logic.Ur
-    Linear.Logic.Y
   exposed-modules:
     Linear.Logic
     Linear.Logic.Functor
+    Linear.Logic.Orphans
     Linear.Logic.Ops
     Linear.Logic.Unsafe
+    Linear.Logic.Y
   ghc-options:
     -Wall -fexpose-all-unfoldings -fspecialize-aggressively
     -fno-show-valid-hole-fits
