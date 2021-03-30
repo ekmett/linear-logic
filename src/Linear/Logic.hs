@@ -85,8 +85,9 @@ module Linear.Logic
 , Ur(..)
 , extractUr
 , duplicateUr
-, seelyUr
-, seelyUrTop
+, seely
+-- , contraseely
+, seelyTop
 , weakenUr, distUr
 , contractUr
 -- ? modality
@@ -104,6 +105,7 @@ module Linear.Logic
 -- * infinite additives
 , DWith(..), runDWith, dwith
 , DSum(..)
+-- * indexed propositions
 , IProp(..)
 , type (:&:)(..)
 , type (:*:)(..)
@@ -404,12 +406,12 @@ instance (Prop a, Prop b) => Prop (a ⧟ b) where
   type Not (a ⧟ b) = a # b
   Iso f != ApartR a nb = f R != (a :-#> nb)
   Iso f != ApartL na b = f L != (b :-#> na)
-  
+
 instance (Prop a, Prop b) => Prop (a # b) where
   type Not (a # b) = a ⧟ b
   ApartR a nb != Iso f = f R != (a :-#> nb)
   ApartL na b != Iso f = f L != (b :-#> na)
-  
+
 class Iso p where
   iso :: (forall c. Y (b ⊸ a) (a ⊸ b) c -> c) %1 -> p a b
   apart :: Not (p a b) %1 -> a # b
@@ -620,7 +622,7 @@ dwith :: (forall x. f x %1 -> g x) %1 -> DWith f g
 dwith = DWith
 
 runDWith :: DWith f g %1 -> f x %1 -> g x
-runDWith (DWith f) = f 
+runDWith (DWith f) = f
 
 type IPrep f = INot (INot f) ~ f
 
@@ -678,7 +680,7 @@ instance (IProp f, IProp g) => IProp (f :+: g) where
     R1 g -> icontradict g (f R)
   inot = Refl
 
-newtype (:⅋:) (a :: i -> Type) (b :: i -> Type) (x :: i) = 
+newtype (:⅋:) (a :: i -> Type) (b :: i -> Type) (x :: i) =
   IPar (forall (c :: Type). Y (INot b x %1 -> a x) (INot a x %1 -> b x) c -> c)
 
 instance (IProp f, IProp g) => Prop ((f :*: g) a) where
@@ -688,7 +690,7 @@ instance (IProp f, IProp g) => Prop ((f :*: g) a) where
 instance (IProp f, IProp g) => Prop ((f :⅋: g) a) where
   type Not ((f :⅋: g) a) = (INot f :*: INot g) a
   IPar h != (f :*: g) = icontradict (h R f) g
-  
+
 instance (IProp f, IProp g) => IProp (f :*: g) where
   type INot (f :*: g) = INot f :⅋: INot g
   icontradict (f :*: g) (IPar h) = icontradict (h R f) g
@@ -701,7 +703,7 @@ instance (IProp f, IProp g) => IProp (f :⅋: g) where
 
 -- FTensor would match hkd. DFoo would match dependent-sum, dependent-hashmap. change hkd?
 -- we need some way to talk about a partitioning/swizzling of a list into two lists
--- then you can project out subsets of the rows with a swizzle. then this generalizes to 'f's 
+-- then you can project out subsets of the rows with a swizzle. then this generalizes to 'f's
 -- that can be swizzled into 'g's and 'h's?
 -- newtype DTensor :: [i] -> (i -> Type) -> Type
 -- newtype DPar :: [i] -> (i -> Type) -> Type
@@ -723,7 +725,7 @@ tensorToWith = lol \case
       L -> \q -> q != nq
       R -> \p -> lseq p nq
   R -> \(p, q) -> with \case
-    L -> lseq q p 
+    L -> lseq q p
     R -> lseq p q
 
 eitherToPar
@@ -744,29 +746,62 @@ mem = par \case L -> \x -> x; R -> \x -> x
 type Decidable p = p + Not p
 
 --------------------------------------------------------------------------------
--- Seely comonad
+-- Ur is a Seely comonad
 --------------------------------------------------------------------------------
+
+seely'' :: Ur (p & q) %1 -> Ur p * Ur q
+seely'' = \(Ur pwq) -> (Ur (withL pwq), Ur (withR pwq))
+
+unseely'' :: (Ur p * Ur q) %1 -> Ur (p & q)
+unseely'' = \(Ur p, Ur q) -> Ur (with \case L -> p; R -> q)
+
+contraseely'' :: WhyNot p ⅋ WhyNot q %1 -> WhyNot (p + q)
+contraseely'' = \r -> WhyNot \pwq -> because (parL' r (Ur (withR pwq))) (withL pwq)
+
+contraunseely'' :: WhyNot (p + q) %1 -> WhyNot p ⅋ WhyNot q
+contraunseely'' = \n -> par \case
+  L -> \(Ur q) -> WhyNot \p -> because n (with \case L -> p; R -> q)
+  R -> \(Ur p) -> WhyNot \q -> because n (with \case L -> p; R -> q)
+
+seely' :: Lol l => l (Ur (p & q)) (Ur p * Ur q)
+seely' = lol \case L -> contraseely''; R -> seely''
+
+unseely' :: Lol l => l (Ur p * Ur q) (Ur (p & q))
+unseely' = lol \case L -> contraunseely''; R -> unseely''
+
+-- contraseely' :: Lol l => l (WhyNot p ⅋ WhyNot q) (WhyNot (p + q))
+-- contraseely' = lol \case L -> seely''; R -> contraseely''
+
+-- contraunseely' :: Lol l => l (WhyNot (p + q)) (WhyNot p ⅋ WhyNot q)
+-- contraunseely' = lol \case L -> unseely''; R -> contraunseely''
 
 -- | \(!\) is a <https://ncatlab.org/nlab/files/SeelyLinearLogic.pdf Seely comonad>
 --
 -- A seely comonad is a strong monoidal functor from cartesian monoidal structure to
 -- symmetric monoidal structure.
-seelyUr :: Iso iso => iso (Ur (p & q)) (Ur p * Ur q)
-seelyUr = iso \case
-  L -> lol \case
-    L -> \n -> par \case
-      L -> \(Ur q) -> WhyNot \p -> because n (with \case L -> p; R -> q)
-      R -> \(Ur p) -> WhyNot \q -> because n (with \case L -> p; R -> q)
-    R -> \(Ur p, Ur q) -> Ur (with \case L -> p; R -> q)
-  R -> lol \case
-    L -> \r -> WhyNot \pwq -> because (parL' r (Ur (withR pwq))) (withL pwq)
-    R -> \(Ur pwq) -> (Ur (withL pwq), Ur (withR pwq))
+seely :: Iso i => i (Ur (p & q)) (Ur p * Ur q)
+seely = iso \case L -> unseely'; R -> seely'
 
-seelyUrTop :: Iso iso => iso (Ur Top) ()
-seelyUrTop = iso \case
+-- contraseely :: Iso i => i (WhyNot p ⅋ WhyNot q) (WhyNot (p + q))
+-- contraseely = iso \case L -> contraunseely'; R -> contraseely'
+
+seelyTop'' :: Ur Top %1 -> ()
+seelyTop'' = consume
+
+contraunseelyTop'' :: WhyNot Void %1 -> Bot
+contraunseelyTop'' = \n -> because n (Top ())
+
+contraseelyTop'' :: Bot %1 -> WhyNot Void
+contraseelyTop'' = \(Bot f) -> WhyNot \top -> f top
+
+unseelyTop'' :: () %1 -> Ur Top
+unseelyTop'' = \() -> Ur (Top ())
+
+seelyTop :: Iso iso => iso (Ur Top) ()
+seelyTop = iso \case
   L -> lol \case
-    L -> \n -> because n (Top ())
-    R -> \() -> Ur (Top ())
+    L -> contraunseelyTop''
+    R -> unseelyTop''
   R -> lol \case
-    L -> \(Bot f) -> WhyNot \top -> f top
-    R -> consume
+    L -> contraseelyTop''
+    R -> seelyTop''
