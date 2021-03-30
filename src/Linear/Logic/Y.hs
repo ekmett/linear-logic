@@ -31,7 +31,7 @@ import Data.Kind
 
 #ifdef LIFTED_Y
 
-type Y :: i -> j -> k -> Type
+type Y :: i -> i -> i -> Type
 type role Y nominal nominal nominal
 data Y a b c where
   L :: Y a b a

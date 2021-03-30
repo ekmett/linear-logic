@@ -6,6 +6,7 @@
 {-# language FlexibleContexts #-}
 {-# language ViewPatterns #-}
 {-# language FlexibleInstances #-}
+{-# language DataKinds #-}
 {-# language NoImplicitPrelude #-}
 {-# language GADTs #-}
 {-# language LambdaCase #-}
@@ -82,22 +83,45 @@ module Linear.Logic
 , Nofun(..)
 -- ! modality
 , Ur(..)
-, extractUr, duplicateUr
+, extractUr
+, duplicateUr
+, seelyUr
+, seelyUrTop
 , weakenUr, distUr
 , contractUr
 -- ? modality
 , WhyNot(..), because, whyNot
 , returnWhyNot, joinWhyNot
+, mem
+, Decidable
 -- Internals
 , Y(..)
 , linear
+-- consumable
+, tensorToWith
+, eitherToPar
+
+-- * infinite additives
+, DWith(..), runDWith, dwith
+, DSum(..)
+, IProp(..)
+, type (:&:)(..)
+, type (:*:)(..)
+, type (:⅋:)(..)
+, type (:+:)(..)
 ) where
 
+import Control.Applicative (Const(..))
 import Control.Category qualified as C
+import Data.Dependent.Sum
 import Data.Kind
 import Data.Void
+import Data.Functor.Product
+import Data.Functor.Sum
+import Data.Type.Equality
+import GHC.Generics
 import GHC.Types
-import Prelude.Linear
+import Prelude.Linear hiding (Sum)
 import Linear.Logic.Orphans ()
 import Linear.Logic.Y
 import Unsafe.Linear (toLinear)
@@ -145,6 +169,12 @@ data Top where
 -- Defined via ?0 = Bot = WhyNot Void = forall r. Not Void %1 -> r = (forall r. Top %1 -> r)
 data Bot where
   Bot :: (forall a. Top %1 -> a) %1 -> Bot
+
+instance Consumable Bot where
+  consume (Bot f) = f (Top ())
+
+instance Dupable Bot where
+  dup2 (Bot f) = f (Top ())
 
 -- | The unit for additive conjunction, \(\top\)
 --
@@ -582,3 +612,161 @@ parL = lol \case
     L -> parR' p
     R -> parL' p
 
+
+
+newtype DWith f g = DWith (forall x. f x %1 -> g x)
+
+dwith :: (forall x. f x %1 -> g x) %1 -> DWith f g
+dwith = DWith
+
+runDWith :: DWith f g %1 -> f x %1 -> g x
+runDWith (DWith f) = f 
+
+type IPrep f = INot (INot f) ~ f
+
+class
+  ( IProp (INot f)
+  , IPrep f
+  , forall a. Prop (f a)
+  ) => IProp (f :: i -> Type) where
+  type INot (f :: i -> Type) = (c :: i -> Type) | c -> f
+  icontradict :: f a %1 -> INot f a %1 -> r
+  inot :: INot f a :~: Not (f a)
+
+instance Prop a => IProp (Const a) where
+  type INot (Const a) = Const (Not a)
+  inot = Refl
+  icontradict (Const a) (Const na) = a != na
+
+instance Prop a => Prop (Const a b) where
+  type Not (Const a b) = Const (Not a) b
+  Const a != Const na = a != na
+
+instance IProp g => Prop (DWith f g) where
+  type Not (DWith f g) = DSum f (INot g)
+  h != (f :=> g) = icontradict g (runDWith h f)
+
+instance IProp g => Prop (DSum f g) where
+  type Not (DSum f g) = DWith f (INot g)
+  (f :=> g) != h = icontradict g (runDWith h f)
+
+type (:&:) :: forall i. (i -> Type) -> (i -> Type) -> i -> Type
+newtype (:&:) f g a = IWith (forall h. Y f g h -> h a)
+
+instance (IProp f, IProp g) => Prop ((:&:) f g a) where
+  type Not ((:&:) f g a) = (INot f :+: INot g) a
+  (!=) (IWith f) = \case
+    L1 g -> icontradict (f L) g
+    R1 g -> icontradict (f R) g
+
+instance (IProp f, IProp g) => Prop ((:+:) f g a) where
+  type Not ((:+:) f g a) = (INot f :&: INot g) a
+  L1 g != IWith f = icontradict g (f L)
+  R1 g != IWith f = icontradict g (f R)
+
+instance (IProp f, IProp g) => IProp (f :&: g) where
+  type INot (f :&: g) = INot f :+: INot g
+  icontradict (IWith f) = \case
+    L1 g -> icontradict (f L) g
+    R1 g -> icontradict (f R) g
+  inot = Refl
+
+instance (IProp f, IProp g) => IProp (f :+: g) where
+  type INot (f :+: g) = INot f :&: INot g
+  icontradict s (IWith f) = s & \case
+    L1 g -> icontradict g (f L)
+    R1 g -> icontradict g (f R)
+  inot = Refl
+
+newtype (:⅋:) (a :: i -> Type) (b :: i -> Type) (x :: i) = 
+  IPar (forall (c :: Type). Y (INot b x %1 -> a x) (INot a x %1 -> b x) c -> c)
+
+instance (IProp f, IProp g) => Prop ((f :*: g) a) where
+  type Not ((f :*: g) a) = (INot f :⅋: INot g) a
+  (f :*: g) != IPar h = icontradict (h R f) g
+
+instance (IProp f, IProp g) => Prop ((f :⅋: g) a) where
+  type Not ((f :⅋: g) a) = (INot f :*: INot g) a
+  IPar h != (f :*: g) = icontradict (h R f) g
+  
+instance (IProp f, IProp g) => IProp (f :*: g) where
+  type INot (f :*: g) = INot f :⅋: INot g
+  icontradict (f :*: g) (IPar h) = icontradict (h R f) g
+  inot = Refl
+
+instance (IProp f, IProp g) => IProp (f :⅋: g) where
+  type INot (f :⅋: g) = INot f :*: INot g
+  icontradict (IPar h) (f :*: g) = icontradict (h R f) g
+  inot = Refl
+
+-- FTensor would match hkd. DFoo would match dependent-sum, dependent-hashmap. change hkd?
+-- we need some way to talk about a partitioning/swizzling of a list into two lists
+-- then you can project out subsets of the rows with a swizzle. then this generalizes to 'f's 
+-- that can be swizzled into 'g's and 'h's?
+-- newtype DTensor :: [i] -> (i -> Type) -> Type
+-- newtype DPar :: [i] -> (i -> Type) -> Type
+
+
+--------------------------------------------------------------------------------
+-- Interplay between connectives that needs weakening
+--------------------------------------------------------------------------------
+
+tensorToWith
+  :: (Lol l, Prop p, Consumable p, Prop q, Consumable q)
+  => l (p * q) (p & q)
+tensorToWith = lol \case
+  L -> \case
+    Left np -> par \case
+      L -> \q -> lseq q np
+      R -> \p -> p != np
+    Right nq -> par \case
+      L -> \q -> q != nq
+      R -> \p -> lseq p nq
+  R -> \(p, q) -> with \case
+    L -> lseq q p 
+    R -> lseq p q
+
+eitherToPar
+  :: (Lol l, Consumable p, Consumable q, Prop p, Prop q)
+  => l (Not p + Not q) (Not p ⅋ Not q)
+eitherToPar = contra' tensorToWith
+
+--------------------------------------------------------------------------------
+-- Excluded middle and decidability
+--------------------------------------------------------------------------------
+
+-- | multiplicative excluded-middle, equivalent to multiplicative law of non-contradiction
+mem :: Prep p => p ⅋ Not p
+mem = par \case L -> \x -> x; R -> \x -> x
+
+-- | additive excluded middle, or additive law of non-contradiction is a property of a proposition
+-- not a law.
+type Decidable p = p + Not p
+
+--------------------------------------------------------------------------------
+-- Seely comonad
+--------------------------------------------------------------------------------
+
+-- | \(!\) is a <https://ncatlab.org/nlab/files/SeelyLinearLogic.pdf Seely comonad>
+--
+-- A seely comonad is a strong monoidal functor from cartesian monoidal structure to
+-- symmetric monoidal structure.
+seelyUr :: Iso iso => iso (Ur (p & q)) (Ur p * Ur q)
+seelyUr = iso \case
+  L -> lol \case
+    L -> \n -> par \case
+      L -> \(Ur q) -> WhyNot \p -> because n (with \case L -> p; R -> q)
+      R -> \(Ur p) -> WhyNot \q -> because n (with \case L -> p; R -> q)
+    R -> \(Ur p, Ur q) -> Ur (with \case L -> p; R -> q)
+  R -> lol \case
+    L -> \r -> WhyNot \pwq -> because (parL' r (Ur (withR pwq))) (withL pwq)
+    R -> \(Ur pwq) -> (Ur (withL pwq), Ur (withR pwq))
+
+seelyUrTop :: Iso iso => iso (Ur Top) ()
+seelyUrTop = iso \case
+  L -> lol \case
+    L -> \n -> because n (Top ())
+    R -> \() -> Ur (Top ())
+  R -> lol \case
+    L -> \(Bot f) -> WhyNot \top -> f top
+    R -> consume

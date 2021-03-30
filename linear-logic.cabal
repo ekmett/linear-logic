@@ -57,6 +57,8 @@ library
   build-depends:
     base,
     contravariant,
+    dependent-sum,
+    some,
     ghc-prim,
     linear-base
   exposed-modules:
