@@ -28,45 +28,19 @@
 {-# language TypeOperators #-}
 {-# language UndecidableInstances #-}
 {-# language UndecidableSuperClasses #-}
-
-#define DEV
-#ifdef DEV
 {-# language Trustworthy #-}
-{-# options_ghc -Wno-unused-imports #-}
-#else
-{-# language Safe #-}
-#endif
 
-module Linear.Logic.Functor
-{-
-( Category(..)
-, NiceCategory(..)
-, Functor(..)
-, Adjunction(..)
-, Contravariant(..)
-, Bifunctor(..)
-, Profunctor(..)
-, Semimonoidal(..)
-, unassoc
-, Monoidal(..)
-, unlambda
-, unrho
-, Symmetric(..)
-, SymmetricMonoidal
-, Dist(..)
-)
--} where
+-- {-# options_ghc -Wno-unused-imports #-}
 
-import Control.Category qualified as C
+module Linear.Logic.Functor where
+
 import Data.Void
 import Data.Kind
+import GHC.Types
 import Linear.Logic
 import Linear.Logic.Ops
 import Prelude.Linear hiding (id,(.),flip)
-#ifdef DEV
-import Unsafe.Linear
-#endif
-import GHC.Types
+-- import Unsafe.Linear
 
 -- Control.Category.Linear? This isn't internalized into my logic, though
 class Category p where
@@ -129,6 +103,13 @@ class
 fmap :: (Functor f, Prop a, Prop b, Lol l) => (a ⊸ b) -> l (f a) (f b)
 fmap  f = fmap' (Ur f)
 
+instance Functor (FUN m a) where
+  fmap' = lol \case
+    L -> \nf -> apartR nf & \(a2b :-#> Nofun a nc) -> WhyNot \c2b -> a2b a != runLol c2b L nc
+    R -> \(Ur xb) -> lol \case
+      L -> linear \(Nofun a nb) -> Nofun a (runLol xb L nb)
+      R -> \a2x a -> fun' xb (a2x a)
+    
 instance Prop x => Functor ((,) x) where
   fmap' = lol \case
     L -> \nf -> apartR nf & \((x,a) :-#> nxpnb) ->

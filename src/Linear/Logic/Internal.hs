@@ -262,7 +262,7 @@ instance (Prep a, Prop b) => Prop (a ⅋ b) where
 -- | This instance is for @(a %1 -> b)@ despite haddock's lies.
 -- The injective type family on @Not@ forces me to use a flexible
 -- instance, rather than have the instance self-improve
-instance (Prep a, Prop b) => Prop (a %m -> b) where
+instance Prop b => Prop (a %m -> b) where
   type Not (a %m -> b) = Nofun m a b
   f != (Nofun a nb) = f a != nb
   {-# inline (!=) #-}
@@ -276,7 +276,7 @@ deriving stock instance (Read a, Read (Not b)) => Read (Nofun m a b)
 -- deriving stock instance (Eq a, Eq (Not b)) => Eq (Nofun m a b)
 -- deriving stock instance (Ord a, Ord (Not b)) => Ord (Nofun m a b)
 
-instance (Prep a, Prop b) => Prop (Nofun m a b) where
+instance Prop b => Prop (Nofun m a b) where
   type Not (Nofun m a b) = a %m -> b
   Nofun a nb != f = f a != nb
   {-# inline (!=) #-}
