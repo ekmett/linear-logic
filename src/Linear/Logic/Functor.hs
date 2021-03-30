@@ -109,7 +109,7 @@ instance Functor (FUN m a) where
     R -> \(Ur xb) -> lol \case
       L -> linear \(Nofun a nb) -> Nofun a (runLol xb L nb)
       R -> \a2x a -> fun' xb (a2x a)
-    
+
 instance Prop x => Functor ((,) x) where
   fmap' = lol \case
     L -> \nf -> apartR nf & \((x,a) :-#> nxpnb) ->
@@ -223,6 +223,22 @@ instance Profunctor (⊸) where
       R -> \(Ur g) -> lol \case
         L -> linear \(a :-#> nd) -> fun' f a :-#> contra' g nd
         R -> linear \h -> g . h . f
+
+instance Profunctor (FUN m) where
+  dimap' = lol \case
+    L -> \nf -> apartR nf & \case
+      Ur c2d :-#> nh -> apartR nh & \(b2c :-#> Nofun a nd) ->
+        contra' c2d nd & \nc -> WhyNot \a2b -> nc != b2c (fun' a2b a)
+    R -> \(Ur (a2b :: a ⊸ b)) -> lol \case
+      L -> \ng -> apartR ng & linear \(b2c :-#> Nofun a nd) ->
+        WhyNot \(c2d :: c ⊸ d) -> b2c != (Nofun (fun' a2b a) (contra' c2d nd) :: Nofun m b c)
+      R -> \(Ur (c2d :: c ⊸ d)) -> lol \case
+        R -> go where
+          go :: (b %m -> c) %1 -> a %m -> d
+          go b2c a = fun' c2d (b2c (fun' a2b a))
+        L -> go where
+          go :: Nofun m a d %1 -> Nofun m b c
+          go (Nofun a nd) = Nofun (fun' a2b a) (contra' c2d nd)
 
 class
   ( forall a. Prop a => Functor (t a)
