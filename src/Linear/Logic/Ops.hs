@@ -15,21 +15,6 @@ module Linear.Logic.Ops where
 import Linear.Logic
 import Prelude.Linear
 
-{-
-class FromIso f => FromFun f where
-  fun :: With (a %1 -> b) (Not b %1 -> Not a) -> f a b
-
---instance FromFun (a %1 -> b)
---instance FromFun (a ⊸ b)
-
-class FromIso f where
-  iso :: With (a ⊸ b) (b ⊸ a) -> f a b
-
---instance FromFun (a %1 -> b)
---instance FromFun (a ⊸ b)
---instance FromFun (a ⧟ b)
--}
-
 --------------------------------------------------------------------------------
 -- swaps
 --------------------------------------------------------------------------------
@@ -179,44 +164,28 @@ unassocTensor' = lol \case L -> assocPar''; R -> unassocTensor''
 -- associativity isos
 
 assocEither :: Iso i => i ((a + b) + c) (a + (b + c))
-assocEither = iso \case
-  L -> unassocEither'
-  R -> assocEither'
+assocEither = iso \case L -> unassocEither'; R -> assocEither'
 
 unassocEither :: Iso i => i (a + (b + c)) ((a + b) + c)
-unassocEither = iso \case
-  L -> assocEither'
-  R -> unassocEither'
+unassocEither = iso \case L -> assocEither'; R -> unassocEither'
 
 assocWith :: Iso i => i ((a & b) & c) (a & (b & c))
-assocWith = iso \case
-  L -> unassocWith'
-  R -> assocWith'
+assocWith = iso \case L -> unassocWith'; R -> assocWith'
 
 unassocWith :: Iso i => i (a & (b & c)) ((a & b) & c)
-unassocWith = iso \case
-  L -> assocWith'
-  R -> unassocWith'
+unassocWith = iso \case L -> assocWith'; R -> unassocWith'
 
 assocTensor :: Iso i => i ((a * b) * c) (a * (b * c))
-assocTensor = iso \case
-  L -> unassocTensor'
-  R -> assocTensor'
+assocTensor = iso \case L -> unassocTensor'; R -> assocTensor'
 
 unassocTensor :: Iso i => i (a * (b * c)) ((a * b) * c)
-unassocTensor = iso \case
-  L -> assocTensor'
-  R -> unassocTensor'
+unassocTensor = iso \case L -> assocTensor'; R -> unassocTensor'
 
 assocPar :: Iso i => i ((a ⅋ b) ⅋ c) (a ⅋ (b ⅋ c))
-assocPar = iso \case
-  L -> unassocPar'
-  R -> assocPar'
+assocPar = iso \case L -> unassocPar'; R -> assocPar'
 
 unassocPar :: Iso i => i (a ⅋ (b ⅋ c)) ((a ⅋ b) ⅋ c)
-unassocPar = iso \case
-  L -> assocPar'
-  R -> unassocPar'
+unassocPar = iso \case L -> assocPar'; R -> unassocPar'
 
 --------------------------------------------------------------------------------
 -- * lambda & rho
@@ -285,180 +254,113 @@ unrhoWith'' = withL
 -- left unitor lolis
 
 unlambdaEither' :: Lol l => l (Void + a) a
-unlambdaEither' = lol \case
-  L -> lambdaWith''
-  R -> unlambdaEither''
+unlambdaEither' = lol \case L -> lambdaWith''; R -> unlambdaEither''
 
 lambdaEither' :: Lol l => l a (Void + a)
-lambdaEither' = lol \case
-  L -> unlambdaWith''
-  R -> lambdaEither''
+lambdaEither' = lol \case L -> unlambdaWith''; R -> lambdaEither''
 
 unlambdaWith' :: Lol l => l (Top & a) a
-unlambdaWith' = lol \case
-  L -> lambdaEither''
-  R -> unlambdaWith''
+unlambdaWith' = lol \case L -> lambdaEither''; R -> unlambdaWith''
 
 lambdaWith' :: Lol l => l a (Top & a)
-lambdaWith' = lol \case
-  L -> unlambdaEither''
-  R -> lambdaWith''
+lambdaWith' = lol \case L -> unlambdaEither''; R -> lambdaWith''
 
 unlambdaTensor' :: (Lol l, Prop a) => l (() * a) a
-unlambdaTensor' = lol \case
-  L -> lambdaPar''
-  R -> unlambdaTensor''
+unlambdaTensor' = lol \case L -> lambdaPar''; R -> unlambdaTensor''
 
 lambdaTensor' :: Lol l => l a (() * a)
-lambdaTensor' = lol \case
-  L -> unlambdaPar''
-  R -> lambdaTensor''
+lambdaTensor' = lol \case L -> unlambdaPar''; R -> lambdaTensor''
 
 unlambdaPar' :: Lol l => l (Bot ⅋ a) a
-unlambdaPar' = lol \case
-  L -> lambdaTensor''
-  R -> unlambdaPar''
+unlambdaPar' = lol \case L -> lambdaTensor''; R -> unlambdaPar''
 
 lambdaPar' :: (Lol l, Prop a) => l a (Bot ⅋ a)
-lambdaPar' = lol \case
-  L -> unlambdaTensor''
-  R -> lambdaPar''
+lambdaPar' = lol \case L -> unlambdaTensor''; R -> lambdaPar''
 
 -- left unitor isos
 
 lambdaPar :: (Iso i, Prop a) => i a (Bot ⅋ a)
-lambdaPar = iso \case
-  L -> unlambdaPar'
-  R -> lambdaPar'
+lambdaPar = iso \case L -> unlambdaPar'; R -> lambdaPar'
 
 unlambdaPar :: (Iso i, Prop a) => i (Bot ⅋ a) a
-unlambdaPar = iso \case
-  L -> lambdaPar'
-  R -> unlambdaPar'
+unlambdaPar = iso \case L -> lambdaPar'; R -> unlambdaPar'
 
 lambdaWith :: Iso i => i a (Top & a)
-lambdaWith = iso \case
-  L -> unlambdaWith'
-  R -> lambdaWith'
+lambdaWith = iso \case L -> unlambdaWith'; R -> lambdaWith'
 
 unlambdaWith :: Iso i => i (Top & a) a
-unlambdaWith = iso \case
-  L -> lambdaWith'
-  R -> unlambdaWith'
+unlambdaWith = iso \case L -> lambdaWith'; R -> unlambdaWith'
 
 lambdaEither :: Iso i => i a (Void + a)
-lambdaEither = iso \case
-  L -> unlambdaEither'
-  R -> lambdaEither'
+lambdaEither = iso \case L -> unlambdaEither'; R -> lambdaEither'
 
 unlambdaEither :: Iso i => i (Void + a) a
-unlambdaEither = iso \case
-  L -> lambdaEither'
-  R -> unlambdaEither'
+unlambdaEither = iso \case L -> lambdaEither'; R -> unlambdaEither'
 
 lambdaTensor :: (Iso i, Prop a) => i a (() * a)
-lambdaTensor = iso \case
-  L -> unlambdaTensor'
-  R -> lambdaTensor'
+lambdaTensor = iso \case L -> unlambdaTensor'; R -> lambdaTensor'
 
 unlambdaTensor :: (Iso i, Prop a) => i (() * a) a
-unlambdaTensor = iso \case
-  L -> lambdaTensor'
-  R -> unlambdaTensor'
+unlambdaTensor = iso \case L -> lambdaTensor'; R -> unlambdaTensor'
 
 -- rho
 
 unrhoEither' :: Lol l => l (a + Void) a
-unrhoEither' = lol \case
-  L -> rhoWith''
-  R -> unrhoEither''
+unrhoEither' = lol \case L -> rhoWith''; R -> unrhoEither''
 
 rhoEither' :: Lol l => l a (a + Void)
-rhoEither' = lol \case
-  L -> unrhoWith''
-  R -> rhoEither''
+rhoEither' = lol \case L -> unrhoWith''; R -> rhoEither''
 
 unrhoWith' :: Lol l => l (a & Top) a
-unrhoWith' = lol \case
-  L -> rhoEither''
-  R -> unrhoWith''
+unrhoWith' = lol \case L -> rhoEither''; R -> unrhoWith''
 
 rhoWith' :: Lol l => l a (a & Top)
-rhoWith' = lol \case
-  L -> unrhoEither''
-  R -> rhoWith''
+rhoWith' = lol \case L -> unrhoEither''; R -> rhoWith''
 
 unrhoTensor' :: (Lol l, Prop a) => l (a * ()) a
-unrhoTensor' = lol \case
-  L -> rhoPar''
-  R -> unrhoTensor''
+unrhoTensor' = lol \case L -> rhoPar''; R -> unrhoTensor''
 
 rhoTensor' :: Lol l => l a (a * ())
-rhoTensor' = lol \case
-  L -> unrhoPar''
-  R -> rhoTensor''
+rhoTensor' = lol \case L -> unrhoPar''; R -> rhoTensor''
 
 unrhoPar' :: Lol l => l (a ⅋ Bot) a
-unrhoPar' = lol \case
-  L -> rhoTensor''
-  R -> unrhoPar''
+unrhoPar' = lol \case L -> rhoTensor''; R -> unrhoPar''
 
 rhoPar' :: (Lol l, Prop a) => l a (a ⅋ Bot)
-rhoPar' = lol \case
-  L -> unrhoTensor''
-  R -> rhoPar''
+rhoPar' = lol \case L -> unrhoTensor''; R -> rhoPar''
 
 -- left unitor isos
 
 rhoPar :: (Iso i, Prop a) => i a (a ⅋ Bot)
-rhoPar = iso \case
-  L -> unrhoPar'
-  R -> rhoPar'
+rhoPar = iso \case L -> unrhoPar'; R -> rhoPar'
 
 unrhoPar :: (Iso i, Prop a) => i (a ⅋ Bot) a
-unrhoPar = iso \case
-  L -> rhoPar'
-  R -> unrhoPar'
+unrhoPar = iso \case L -> rhoPar'; R -> unrhoPar'
 
 rhoWith :: Iso i => i a (a & Top)
-rhoWith = iso \case
-  L -> unrhoWith'
-  R -> rhoWith'
+rhoWith = iso \case L -> unrhoWith'; R -> rhoWith'
 
 unrhoWith :: Iso i => i (a & Top) a
-unrhoWith = iso \case
-  L -> rhoWith'
-  R -> unrhoWith'
+unrhoWith = iso \case L -> rhoWith'; R -> unrhoWith'
 
 rhoEither :: Iso i => i a (a + Void)
-rhoEither = iso \case
-  L -> unrhoEither'
-  R -> rhoEither'
+rhoEither = iso \case L -> unrhoEither'; R -> rhoEither'
 
 unrhoEither :: Iso i => i (a + Void) a
-unrhoEither = iso \case
-  L -> rhoEither'
-  R -> unrhoEither'
+unrhoEither = iso \case L -> rhoEither'; R -> unrhoEither'
 
 rhoTensor :: (Iso i, Prop a) => i a (a * ())
-rhoTensor = iso \case
-  L -> unrhoTensor'
-  R -> rhoTensor'
+rhoTensor = iso \case L -> unrhoTensor'; R -> rhoTensor'
 
 unrhoTensor :: (Iso i, Prop a) => i (a * ()) a
-unrhoTensor = iso \case
-  L -> rhoTensor'
-  R -> unrhoTensor'
-
+unrhoTensor = iso \case L -> rhoTensor'; R -> unrhoTensor'
 
 --------------------------------------------------------------------------------
 -- isos and apartness
 --------------------------------------------------------------------------------
 
 inv'' :: Iso i => (a ⧟ b) %1 -> i b a
-inv'' (Iso f) = iso \case
-  L -> f R
-  R -> f L
+inv'' (Iso f) = iso \case L -> f R; R -> f L
 
 inv' :: (Lol l, Iso i) => l (a ⧟ b) (i b a)
 inv' = lol \case
@@ -466,23 +368,17 @@ inv' = lol \case
   R -> inv''
 
 inv :: (Iso i) => i (a ⧟ b) (b ⧟ a)
-inv = iso \case
-  L -> inv'
-  R -> inv'
+inv = iso \case L -> inv'; R -> inv'
   
 swapApart'' :: a # b %1 -> b # a
 swapApart'' (ApartL na b) = ApartR b na
 swapApart'' (ApartR a nb) = ApartL nb a
 
 swapApart' :: Lol l => l (a # b) (b # a)
-swapApart' = lol \case
-  L -> inv''
-  R -> swapApart''
+swapApart' = lol \case L -> inv''; R -> swapApart''
 
 swapApart :: Iso iso => iso (a # b) (b # a)
-swapApart = iso \case
-  L -> swapApart'
-  R -> swapApart'
+swapApart = iso \case L -> swapApart'; R -> swapApart'
 
 --------------------------------------------------------------------------------
 -- currying

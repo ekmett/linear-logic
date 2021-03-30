@@ -76,7 +76,7 @@ module Linear.Logic
 , type (%->)
 , type (-#>)(..)
 -- equality and apartness
-, Iso(..), runIso
+, Iso(..), runIso, contraIso, contraIso', contraIso''
 , type (⧟)(..)
 , type (#)(..)
 -- primitive implication
@@ -112,7 +112,8 @@ module Linear.Logic
 , type (:*:)(..)
 , type (:⅋:)(..)
 , type (:+:)(..)
--- dubious
+
+-- somewhat dubious
 , semiseely
 , semiseelyUnit
 ) where
@@ -509,8 +510,22 @@ contra = iso \case
   L -> contra'
   R -> contra'
 
--- contra' :: p ⊸ q %1 -> Not q %1 -> Not p
--- contra' = \(Lol f) -> f L
+contraIso'' :: forall iso p q. (Iso iso, Prep p, Prep q) => p ⧟ q %1 -> iso (Not q) (Not p)
+contraIso'' = \(Iso f) -> iso \case
+  L -> contra' (f L)
+  R -> contra' (f R)
+
+contraIso' :: forall l iso p q. (Lol l, Iso iso, Prep p, Prep q) => l (p ⧟ q) (iso (Not q) (Not p))
+contraIso' = lol \case
+  L -> \x -> apart x & \case
+    ApartL p nq -> ApartL nq p
+    ApartR p nq -> ApartR nq p
+  R -> contraIso''
+
+contraIso :: forall iso p q. (Iso iso, Prep p, Prep q) => iso (p ⧟ q) (Not q ⧟ Not p)
+contraIso = iso \case
+  L -> contraIso'
+  R -> contraIso'
 
 -- | The \(?a\) or "why not?" modality.
 type role WhyNot nominal
