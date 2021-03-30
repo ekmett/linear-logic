@@ -64,6 +64,7 @@ library
   exposed-modules:
     Linear.Logic
     Linear.Logic.Functor
+    Linear.Logic.Internal
     Linear.Logic.Orphans
     Linear.Logic.Ops
     Linear.Logic.Unsafe
