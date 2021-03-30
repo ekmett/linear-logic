@@ -55,9 +55,6 @@
 -- '(,)' (or @('*')@) takes the place of the traditional \(\otimes\)
 --
 -- To use the alias for @('*')@, make sure to enable @{-# LANGUAGE NoStarIsType #-}@
---
--- Negative polarity connectives are 'GHC.Types.RuntimeRep' polymorphic,
--- but only currently have 'Prop' instances defined for ''LiftedRep'
 
 module Linear.Logic
 ( Prep
