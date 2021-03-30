@@ -85,6 +85,7 @@ module Linear.Logic
 , Ur(..)
 , extractUr
 , duplicateUr
+, dupUr
 , seely
 -- , contraseely
 , seelyTop
@@ -111,6 +112,9 @@ module Linear.Logic
 , type (:*:)(..)
 , type (:⅋:)(..)
 , type (:+:)(..)
+-- dubious
+, semiseely
+, semiseelyUnit
 ) where
 
 import Control.Applicative (Const(..))
@@ -564,6 +568,17 @@ duplicateUr = lol \case
   R -> \(Ur p) -> Ur (Ur p)
 {-# inline duplicateUr #-}
 
+dupUr :: (Iso i, Prop a) => i (Ur a) (Ur a * Ur a)
+dupUr = iso \case
+  L -> lol \case
+    L -> \n -> par \case
+      L -> (n !=)
+      R -> (n !=)
+    R -> \(Ur a, Ur{}) -> (Ur a)
+  R -> lol \case
+    L -> \p -> WhyNot \a -> because (parR' p (Ur a)) a
+    R -> \(Ur a) -> (Ur a, Ur a)
+
 contractUr :: (Prep p, Prop q) => (Ur p ⊸ Ur p ⊸ q) ⊸ Ur p ⊸ q
 contractUr = lol \case
   L -> \(Ur p :-#> nq) -> (Ur p :-#> (Ur p :-#> nq))
@@ -805,3 +820,28 @@ seelyTop = iso \case
   R -> lol \case
     L -> contraseelyTop''
     R -> seelyTop''
+
+-- | valid in a semicartesian *-autonomous lattice
+--
+-- This is generally not valid in linear logic, but holds
+-- in affine logic, and seems to hold here.
+semiseely :: (Iso i, Prep p) => i (Ur (p * q)) (Ur p * Ur q)
+semiseely = iso \case
+  L -> lol \case
+    L -> \k -> par \case
+      L -> \(Ur q) -> WhyNot \p -> because k (p, q)
+      R -> \(Ur p) -> WhyNot \q -> because k (p, q)
+    R -> \(Ur p, Ur q) -> Ur (p, q)
+  R -> lol \case
+    L -> \x -> WhyNot \(p,q) -> because (parR' x (Ur p)) q
+    R -> \(Ur (p, q)) -> (Ur p, Ur q)
+
+semiseelyUnit :: Iso i => i (Ur ()) ()
+semiseelyUnit = iso \case
+  L -> lol \case
+    L -> \n -> because n ()
+    R -> \() -> Ur ()
+  R -> lol \case
+    L -> \b -> WhyNot \p -> b != p
+    R -> \(Ur ()) -> ()
+
