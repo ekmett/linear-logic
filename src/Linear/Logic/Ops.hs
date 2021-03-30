@@ -412,7 +412,7 @@ uncurryTensor' = lol \case
 
 curryTensor
   :: (Iso i, Prep a, Prep b, Prep c)
-  => i ((a * b) ⊸ c) (a ⊸ (b ⊸ c))
+  => i ((a * b) ⊸ c) (a ⊸ b ⊸ c)
 curryTensor = iso \case
   L -> uncurryTensor'
   R -> curryTensor'
@@ -423,3 +423,22 @@ uncurryTensor
 uncurryTensor = iso \case
   L -> curryTensor'
   R -> uncurryTensor'
+
+flip'' :: (Prep a, Prep b, Prep c, Lol l, Lol l') => (a ⊸ b ⊸ c) %1 -> l b (l' a c)
+flip'' f = lol \case
+  L -> \nac -> apartR nac & \(a :-#> nc) -> contra' (fun' f a) nc
+  R -> \b -> lol \case
+    L -> \nc -> contra' f (b :-#> nc)
+    R -> \a -> fun' (fun' f a) b
+
+flip' :: (Prep a, Prep b, Prep c, Lol l, Lol l', Lol l'') => l (a ⊸ b ⊸ c) (l' b (l'' a c))
+flip' = lol \case
+  L -> \nbac -> apartR nbac & \(b :-#> nac) ->
+    apartR nac & \(a :-#> nc) -> a :-#> b :-#> nc
+  R -> flip''
+
+flip :: (Prep a, Prep b, Prep c, Iso iso) => iso (a ⊸ b ⊸ c) (b ⊸ a ⊸ c)
+flip = iso \case
+  L -> flip'
+  R -> flip'
+

@@ -7,6 +7,7 @@
 {-# language ImportQualifiedPost #-}
 {-# language FlexibleContexts #-}
 {-# language FlexibleInstances #-}
+{-# language FunctionalDependencies #-}
 {-# language GADTs #-}
 {-# language LambdaCase #-}
 {-# language LinearTypes #-}
@@ -37,9 +38,11 @@
 #endif
 
 module Linear.Logic.Functor
+{-
 ( Category(..)
 , NiceCategory(..)
 , Functor(..)
+, Adjunction(..)
 , Contravariant(..)
 , Bifunctor(..)
 , Profunctor(..)
@@ -50,20 +53,22 @@ module Linear.Logic.Functor
 , unrho
 , Symmetric(..)
 , SymmetricMonoidal
-) where
+, Dist(..)
+) 
+-} where
 
 import Control.Category qualified as C
 import Data.Void
 import Data.Kind
 import Linear.Logic
 import Linear.Logic.Ops
-import Prelude.Linear hiding (id,(.))
+import Prelude.Linear hiding (id,(.),flip)
 #ifdef DEV
 import Unsafe.Linear
 #endif
 import GHC.Types
 
--- Control.Category.Linear?
+-- Control.Category.Linear? This isn't internalized into my logic, though
 class Category p where
   id :: p a a
   (.) :: p b c %1 -> p a b %1 -> p a c
@@ -72,6 +77,8 @@ instance Category (FUN 'One) where
   id x = x
   f . g = \x -> f (g x)
 
+-- | Here we have the ability to provide more refutations, because we can walk
+-- all the way back to my arrows. This is internal to my logic.
 class NiceCategory p where
   o :: (Lol l, Lol l') => l (p b c) (l' (p a b) (p a c))
 
@@ -117,123 +124,199 @@ instance NiceCategory (⧟) where
 class
   ( forall a. Prop a => Prop (f a)
   ) => Functor f where
-  fmap :: (Prop a, Prop b) => (a ⊸ b) -> f a ⊸ f b
+  fmap' :: (Prop a, Prop b, Lol l, Lol l') => l (Ur (a ⊸ b)) (l' (f a) (f b))
 
-instance Functor Ur where
-  fmap f = lol \case
-    L -> \(WhyNot cb) -> WhyNot \a -> cb (fun f a)
-    R -> \(Ur a) -> Ur (fun f a)
-  {-# inline fmap #-}
-
-instance Functor WhyNot where
-  fmap f = lol \case
-    L -> \(Ur nb) -> Ur (contra' f nb)
-    R -> \na2v -> whyNot \nb -> because na2v (contra' f nb)
-  {-# inline fmap #-}
-
-instance Prop a => Functor ((⊸) a) where
-  fmap f = lol \case
-    L -> \x -> x & \(a :-#> nb) -> a :-#> contra' f nb
-    R -> linear \g -> lol \case
-      L -> linear \nb -> contra' g (contra' f nb)
-      R -> \a -> fun' f (fun' g a)
-
-instance Prop a => Functor (Either a) where
-  fmap f = lol \case
-    L -> \nawnb -> with \case
-      L -> withL nawnb
-      R -> contra' f (withR nawnb)
-    R -> \case
-      Left a -> Left a
-      Right x -> Right (fun f x)
+fmap :: (Functor f, Prop a, Prop b, Lol l) => (a ⊸ b) -> l (f a) (f b)
+fmap  f = fmap' (Ur f)
 
 instance Prop x => Functor ((,) x) where
-  fmap f = lol \case
-    L -> \nxpnb -> par \case
-      L -> \a -> parL' nxpnb (fun f a)
-      R -> \x -> contra' f (parR' nxpnb x)
-    R -> \(x, a) -> (x, fun f a)
-  {-# inline fmap #-}
+  fmap' = lol \case
+    L -> \nf -> apartR nf & \((x,a) :-#> nxpnb) -> 
+      WhyNot \a2b -> x != parL nxpnb (fun a2b a)
+    R -> \(Ur f) -> lol \case
+      L -> \nxpnb -> par \case
+        L -> \a -> parL' nxpnb (fun f a)
+        R -> \x -> contra' f (parR' nxpnb x)
+      R -> \(x, a) -> (x, fun f a)
+
+instance Prop x => Functor ((⊸) x) where
+  fmap' = lol \case
+    L -> \nf -> apartR nf & \(x2a :-#> x :-#> nb) -> 
+      WhyNot \a2b -> fun' a2b (fun' x2a x) != nb
+    R -> \(Ur f) -> lol \case
+      L -> \x -> x & \(a :-#> nb) -> a :-#> contra' f nb
+      R -> linear \g -> lol \case
+        L -> linear \nb -> contra' g (contra' f nb)
+        R -> \a -> fun' f (fun' g a)
+
+instance Functor Ur where
+  fmap' = lol \case
+    L -> \nf -> apartR nf & \(Ur a :-#> f) -> 
+      WhyNot \p -> because f (fun' p a)
+    R -> \(Ur f) -> lol \case
+      L -> \(WhyNot cb) -> WhyNot \a -> cb (fun f a)
+      R -> \(Ur a) -> Ur (fun f a)
+
+instance Functor WhyNot where
+  fmap' = lol \case
+    L -> \nf -> apartR nf & \(wna :-#> Ur nb) -> 
+      WhyNot \a2b -> because wna (contra' a2b nb)
+    R -> \(Ur f) -> lol \case
+      L -> \(Ur nb) -> Ur (contra' f nb)
+      R -> \na2v -> whyNot \nb -> because na2v (contra' f nb)
+
+instance Prop a => Functor (Either a) where
+  fmap' = lol \case
+    L -> \nf -> apartR nf & \case
+      Left a :-#> g -> WhyNot \_ -> a != withL g
+      Right b :-#> g -> WhyNot \p -> fun' p b != withR g
+    R -> \(Ur f) -> lol \case
+      L -> \nawnb -> with \case
+        L -> withL nawnb
+        R -> contra' f (withR nawnb)
+      R -> \case
+        Left a -> Left a
+        Right x -> Right (fun f x)
 
 instance Prop p => Functor ((&) p) where
-  fmap f = lol \case
-    L -> \case
-      Left np -> Left np
-      Right nb -> Right (contra' f nb)
-    R -> \pwa -> with \case
-      L -> withL pwa
-      R -> fun f (withR pwa)
+  fmap' = lol \case
+    L -> \nf -> apartR nf & \case
+      pwa :-#> Left np -> WhyNot \_ -> withL pwa != np
+      pwa :-#> Right nb -> WhyNot \a2b -> fun' a2b (withR pwa) != nb
+    R -> \(Ur f) -> lol \case
+      L -> \case
+        Left np -> Left np
+        Right nb -> Right (contra' f nb)
+      R -> \pwa -> with \case
+        L -> withL pwa
+        R -> fun f (withR pwa)
 
 instance Prop a => Functor ((⅋) a) where
-  fmap f = lol \case
-    L -> \(na,nb) -> (na, contra' f nb)
-    R -> \apa1 -> par \case
-      L -> \nb -> parL' apa1 (contra' f nb)
-      R -> \na -> fun f (parR' apa1 na)
+  fmap' = lol \case
+    L -> \nf -> apartR nf & \(apc :-#> (na,nb)) -> 
+      WhyNot \c2b -> parR apc na != contra' c2b nb
+    R -> \(Ur f) -> lol \case
+      L -> \(na,nb) -> (na, contra' f nb)
+      R -> \apa1 -> par \case
+        L -> \nb -> parL' apa1 (contra' f nb)
+        R -> \na -> fun f (parR' apa1 na)
+
+class (Functor f, Functor g) => Adjunction f g | f -> g, g -> f where
+  adj :: (Iso iso, Prop a, Prop b) => iso (f a ⊸ b) (a ⊸ g b)
+
+instance Prop e => Adjunction ((,) e) ((⊸) e) where
+  adj = iso \case
+    L -> uncurryTensor' . flip
+    R -> flip . curryTensor'
 
 class
   ( forall a. Prop a => Prop (f a)
   ) => Contravariant f where
-  contramap :: (Prop a, Prop b) => (a ⊸ b) -> f b ⊸ f a
+  contramap' :: (Prop a, Prop b, Lol l, Lol l') => l (Ur (a ⊸ b)) (l' (f b) (f a))
 
 instance Prop a => Contravariant ((-#>) a) where
-  contramap f = contra (fmap f)
+  contramap' = fun (contra' . fmap')
+
+contramap :: (Contravariant f, Prop a, Prop b, Lol l) => (a ⊸ b) -> l (f b) (f a)
+contramap f = contramap' (Ur f)
 
 class
   ( forall a. Prop a => Functor (t a)
   ) => Profunctor t where
-  dimap
-    :: (Prop a, Prop b, Prop c, Prop d)
-    => (a ⊸ b)
-    -> (c ⊸ d)
-    -> t b c ⊸ t a d
+  dimap'
+    :: (Prop a, Prop b, Prop c, Prop d, Lol l, Lol l', Lol l'')
+    => l (Ur (a ⊸ b)) (l' (Ur (c ⊸ d)) (l'' (t b c) (t a d)))
+
+dimap :: (Profunctor t, Prop a, Prop b, Prop c, Prop d, Lol l)
+    => (a ⊸ b) -> (c ⊸ d) -> l (t b c) (t a d)
+dimap f g = dimap' (Ur f) (Ur g)
 
 instance Profunctor (⊸) where
-  dimap f g = lol \case
-    L -> linear \(a :-#> nd) -> fun' f a :-#> contra' g nd
-    R -> linear \h -> g . h . f
+  dimap' = lol \case
+    L -> \nf -> apartR nf & \case
+      Ur c2d :-#> nh -> apartR nh & \(b2c :-#> a :-#> nd) -> 
+        WhyNot \a2b -> fun' c2d (fun' b2c (fun' a2b a)) != nd
+    R -> \(Ur f) -> lol \case
+      L -> \ng -> apartR ng & \(b2c :-#> a :-#> nd) -> 
+         WhyNot \c2d -> fun' c2d (fun' b2c (fun' f a)) != nd
+      R -> \(Ur g) -> lol \case
+        L -> linear \(a :-#> nd) -> fun' f a :-#> contra' g nd
+        R -> linear \h -> g . h . f
 
 class
   ( forall a. Prop a => Functor (t a)
   ) => Bifunctor t where
-  bimap
-    :: (Prop a, Prop b, Prop c, Prop d)
-    => (a ⊸ b)
-    -> (c ⊸ d)
-    -> t a c ⊸ t b d
+  bimap'
+    :: (Prop a, Prop b, Prop c, Prop d, Lol l, Lol l', Lol l'')
+    => l (Ur (a ⊸ b)) (l' (Ur (c ⊸ d)) (l'' (t a c) (t b d)))
 
+bimap
+  :: (Bifunctor t, Prop a, Prop b, Prop c, Prop d, Lol l)
+  => (a ⊸ b) -> (c ⊸ d) -> l (t a c) (t b d)
+bimap f g = bimap' (Ur f) (Ur g)
 
 instance Bifunctor Either where
-  bimap f g = lol \case
-    L -> \nbwnd -> with \case
-      L -> contra' f (withL nbwnd)
-      R -> contra' g (withR nbwnd)
-    R -> \case
-      Left a -> Left (fun f a)
-      Right c -> Right (fun g c)
+  bimap' = lol \case
+    L -> \nf -> apartR nf & \(Ur c2d :-#> nk) -> 
+      apartR nk & \case
+        Left a :-#> nbwnd -> WhyNot \a2b -> fun' a2b a != withL' nbwnd
+        Right c :-#> nbwnd -> fun' c2d c != withR' nbwnd
+    R -> \(Ur f) -> lol \case
+      L -> \ng -> apartR ng & \case
+        Left a :-#> nbwnd -> fun' f a != withL' nbwnd
+        Right c :-#> nbwnd -> WhyNot \c2d -> fun' c2d c != withR' nbwnd
+      R -> \(Ur g) -> lol \case
+        L -> \nbwnd -> with \case
+          L -> contra' f (withL nbwnd)
+          R -> contra' g (withR nbwnd)
+        R -> \case
+          Left a -> Left (fun f a)
+          Right c -> Right (fun g c)
 
 instance Bifunctor (,) where
-  bimap f g = lol \case
-    L -> \nbpnd -> par \case
-      L -> linear \c -> contra' f (parL' nbpnd (fun g c))
-      R -> linear \a -> contra' g (parR' nbpnd (fun f a))
-    R -> \(a, c) -> (fun f a, fun g c)
+  bimap' = lol \case
+    L -> \nf -> apartR nf & \(Ur c2d :-#> nk) ->
+      apartR nk & \((a,c) :-#> nbpnd) -> WhyNot \a2b -> 
+        fun' c2d c != parR' nbpnd (fun' a2b a)
+    R -> \(Ur f) -> lol \case 
+      L -> \ng -> apartR ng & \((a, c) :-#> nbpnd) -> 
+        WhyNot \c2d -> fun' f a != parL' nbpnd (fun c2d c)
+      R -> \(Ur g) -> lol \case
+        L -> \nbpnd -> par \case
+          L -> linear \c -> contra' f (parL' nbpnd (fun g c))
+          R -> linear \a -> contra' g (parR' nbpnd (fun f a))
+        R -> \(a, c) -> (fun f a, fun g c)
 
 instance Bifunctor (&) where
-  bimap f g = lol \case
-    L -> \case
-      Left nb  -> Left (contra' f nb)
-      Right nd -> Right (contra' g nd)
-    R -> \awc -> with \case
-      L -> fun f (withL' awc)
-      R -> fun g (withR' awc)
+  bimap' = lol \case
+    L -> \nf -> apartR nf & \(Ur c2d :-#> nk) -> 
+      apartR nk & \case
+        awc :-#> Left nb -> WhyNot \a2b -> fun' a2b (withL' awc) != nb
+        awc :-#> Right nd -> withR' awc != contra' c2d nd
+    R -> \(Ur f) -> lol \case
+      L -> \ng -> apartR ng & \case
+        awc :-#> Left nb -> withL awc != contra' f nb
+        awc :-#> Right nd -> WhyNot \c2d -> fun' c2d (withR awc) != nd
+      R -> \(Ur g) -> lol \case
+        L -> \case
+          Left nb  -> Left (contra' f nb)
+          Right nd -> Right (contra' g nd)
+        R -> \awc -> with \case
+          L -> fun f (withL' awc)
+          R -> fun g (withR' awc)
 
 instance Bifunctor (⅋) where
-  bimap f g = lol \case
-    L -> \(nb,nd) -> (contra' f nb, contra' g nd)
-    R -> \apc -> par \case
-      L -> \nd -> fun' f (parL' apc (contra' g nd))
-      R -> \nb -> fun' g (parR' apc (contra' f nb))
+  bimap' = lol \case
+    L -> \nf -> apartR nf & \(Ur c2d :-#> nk) ->
+      apartR nk & \(apc :-#> (nb, nd)) -> 
+        WhyNot \a2b -> parR apc (contra' a2b nb) != contra' c2d nd
+    R -> \(Ur f) -> lol \case
+      L -> \ng -> apartR ng & \(apc :-#> (nb, nd)) -> WhyNot \c2d -> parR apc (contra' f nb) != contra' c2d nd
+      R -> \(Ur g) -> lol \case
+        L -> \(nb,nd) -> (contra' f nb, contra' g nd)
+        R -> \apc -> par \case
+          L -> \nd -> fun' f (parL' apc (contra' g nd))
+          R -> \nb -> fun' g (parR' apc (contra' f nb))
 
 class Bifunctor t => Semimonoidal t where
   assoc :: (Prop a, Prop b, Prop c, Iso iso) => t (t a b) c `iso` t a (t b c)
@@ -316,3 +399,41 @@ instance Symmetric (#) where
 instance Symmetric (⧟) where
   swap = inv
 
+class (Functor f, Bifunctor p) => Dist f p where
+  dist :: (Iso iso, Prop b, Prop c) => iso (f (p b c)) (p (f b) (f c))
+
+instance Prop a => Dist ((,) a) Either where
+  dist = iso \case
+    L -> lol \case
+      L -> \f -> with \case
+        L -> par \case
+          L -> \b -> parL f (Left b)
+          R -> \a -> withL (parR f a)
+        R -> par \case
+          L -> \c -> parL f (Right c)
+          R -> \a -> withR (parR f a)
+      R -> \case
+        Left (a,b) -> (a, Left b)
+        Right (a,c) -> (a, Right c)
+    R -> lol \case
+      L -> \q -> par \case
+        L -> \case
+          Left b -> parL (withL q) b
+          Right c -> parL (withR q) c
+        R -> \a -> with \case
+          L -> parR (withL q) a
+          R -> parR (withR q) a
+      R -> \(a,p) -> p & \case
+        Left b -> Left (a, b)
+        Right c -> Right (a, c)
+
+{-
+instance Prop a => Dist ((⅋) a) (&) where
+  dist = iso \case
+    L -> lol \case
+      L -> _
+      R -> _
+    R -> lol \case
+      L -> _
+      R -> _
+-}

@@ -86,7 +86,7 @@ module Linear.Logic
 , seely
 -- , contraseely
 , seelyTop
-, weakenUr, distUr
+, weakenUr, apUr
 , contractUr
 -- ? modality
 , WhyNot(..), because, whyNot

@@ -294,6 +294,7 @@ data a -#> b where (:-#>) :: a %1 -> Not b %1 -> a -#> b
 infixr 3 -#>, :-#>
 
 newtype a ⧟ b = Iso (forall c. Y (b ⊸ a) (a ⊸ b) c -> c)
+infixr 0 ⧟
 
 runLol :: a ⊸ b %1 -> Y (Not b %1 -> Not a) (a %1 -> b) c -> c
 runLol (Lol f) = f
@@ -316,7 +317,6 @@ instance C.Category (⧟) where
   f . g = Iso \case
     L -> runIso g L C.. runIso f L
     R -> runIso f R C.. runIso g R
-
 
 data a # b
   = ApartL (Not a) b
@@ -468,23 +468,23 @@ instance Prep a => Prop (WhyNot a) where
 
 -- |
 -- @
--- 'weakenUr' :: forall p q. 'Prop' p => p ⊸ ('Ur' q ⊸ p)
+-- 'weakenUr' :: forall p q. 'Prop' p => p ⊸ 'Ur' q ⊸ p
 -- @
 weakenUr :: (Prop p, Lol l, Lol l') => l p (l' (Ur q) p)
 weakenUr = lol \case
   L -> \x -> apartR x & \(Ur {} :-#> np) -> np
   R -> \p -> lol \case
-    L -> \q -> p != q
+    L -> \np -> p != np
     R -> \Ur{} -> p
 {-# inline weakenUr #-}
 
-distUr :: forall p q. (Prep p, Prep q) => Ur (p ⊸ q) ⊸ (Ur p ⊸ Ur q)
-distUr = lol \case
+apUr :: forall p q. (Prep p, Prep q) => Ur (p ⊸ q) ⊸ Ur p ⊸ Ur q
+apUr = lol \case
   L -> \(Ur p :-#> WhyNot nq) -> whyNot \nppq -> nq (fun nppq p)
   R -> \(Ur nppq) -> lol \case
     L -> \(WhyNot nq) -> whyNot \p -> nq (fun nppq p)
     R -> \(Ur p) -> Ur (fun nppq p)
-{-# inline distUr #-}
+{-# inline apUr #-}
 
 extractUr :: (Lol l, Prop p) => l (Ur p) p
 extractUr = lol \case
@@ -494,7 +494,7 @@ extractUr = lol \case
 
 duplicateUr :: Lol l => l (Ur p) (Ur (Ur p))
 duplicateUr = lol \case
-  L -> \(WhyNot f) -> WhyNot (\p -> f (Ur p))
+  L -> \(WhyNot f) -> WhyNot \p -> f (Ur p)
   R -> \(Ur p) -> Ur (Ur p)
 {-# inline duplicateUr #-}
 
@@ -774,4 +774,14 @@ semiseelyUnit = iso \case
   R -> lol \case
     L -> \b -> WhyNot \p -> b != p
     R -> \(Ur ()) -> ()
+
+{- nonsense
+type a -&> b = Not a ⊸ b
+
+curryWith'' :: Lol l => (a & b ⊸ c) %1 -> l a (b -&> c)
+curryWith'' f = lol \case
+  R -> \a -> lol \case 
+    R -> \nb -> _ (fun f) a nb
+  L -> _ f
+-}
 
