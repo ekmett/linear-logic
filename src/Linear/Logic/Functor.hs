@@ -601,22 +601,22 @@ instance Prop a => Dist ((,) a) Either where
     L -> lol \case
       L -> \f -> with \case
         L -> par \case
-          L -> \b -> parL f (Left b)
-          R -> \a -> withL (parR f a)
+          L -> \b -> parL' f (Left b)
+          R -> \a -> withL' (parR' f a)
         R -> par \case
-          L -> \c -> parL f (Right c)
-          R -> \a -> withR (parR f a)
+          L -> \c -> parL' f (Right c)
+          R -> \a -> withR' (parR' f a)
       R -> \case
-        Left (a,b) -> (a, Left b)
-        Right (a,c) -> (a, Right c)
+        Left (a, b) -> (a, Left b)
+        Right (a, c) -> (a, Right c)
     R -> lol \case
       L -> \q -> par \case
         L -> \case
-          Left b -> parL (withL q) b
-          Right c -> parL (withR q) c
+          Left b -> parL' (withL' q) b
+          Right c -> parL' (withR' q) c
         R -> \a -> with \case
-          L -> parR (withL q) a
-          R -> parR (withR q) a
+          L -> parR' (withL' q) a
+          R -> parR' (withR' q) a
       R -> \case
         (a, Left b) ->  Left (a, b)
         (a, Right c) -> Right (a, c)
@@ -629,11 +629,11 @@ instance Prop a => Dist ((⅋) a) (&) where
         (na, Right nc) -> Right (na, nc)
       R -> \f -> par \case
         L -> \case
-          Left nb -> parL (withL f) nb
-          Right nc -> parL (withR f) nc
+          Left nb -> parL' (withL' f) nb
+          Right nc -> parL' (withR' f) nc
         R -> \na -> with \case
-          L -> parR (withL f) na
-          R -> parR (withR f) na
+          L -> parR' (withL' f) na
+          R -> parR' (withR' f) na
     R -> lol \case
       L -> \case
         Left (na, nb) -> (na, Left nb)
@@ -1286,23 +1286,6 @@ parL = lol \case
     L -> parR' p
     R -> parL' p
 
-{- nonsense
-type a -&> b = Not a ⊸ b
-
-curryWith'' :: Lol l => (a & b ⊸ c) %1 -> l a (b -&> c)
-curryWith'' f = lol \case
-  R -> \a -> lol \case
-    R -> \nb -> _ (fun f) a nb
-  L -> _ f
-
--- newtype a ⊃ b = Unrestricted (Ur a ⊸ b)
-
--- newtype a ⇀ b = Partial (a ⊸ WhyNot b)
-
--- a ⇀ b = Neg a ⅋ WhyNot b ~  Ur b ⊸ Neg a
-
--}
-
 contra'' :: forall l p q. (Lol l, Prep p, Prep q) => p ⊸ q %1 -> l (Not q) (Not p)
 contra'' = \(Lol f) -> lol \case
   L -> \na -> f R na
@@ -1355,3 +1338,6 @@ lolPar = iso \case
     L -> \(a, nb) -> a :-#> nb
     R -> \(Lol f) -> Par f
 
+--class Monoidal p => EnrichedCategory p t where
+--  eid :: (Lol l, Prop a) => proxy p -> I p `l` t a a
+--  ecomp :: (Lol l, Prop a) => p (t b c) (t a b) `l` t a c

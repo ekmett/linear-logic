@@ -51,11 +51,11 @@ import Unsafe.Linear (toLinear)
 -- not is merely involutive. used to avoid passing dictionaries when they aren't used
 type Prep a = Not (Not a) ~ a
 
-class (Prop (Not a), Prep a) => Prop (a :: TYPE k) where
+class (Prop (Not a), Prep a) => Prop a where
   -- | \(a^\bot\). The type of refutations of \(a\)
   --
   -- \(a^{\bot^\bot} \) = \(a\)
-  type Not (a :: TYPE k) = (c :: TYPE k) | c -> a
+  type Not a = c | c -> a
   -- | \(a\) and \(a^\bot\) together yield a contradiction.
   --
   -- @
@@ -196,7 +196,7 @@ infixr 3 *
 type (*) = (,)
 
 infixr 2 ⅋
-type (⅋) :: forall i j. TYPE i -> TYPE j -> Type
+type (⅋) :: Type -> Type -> Type
 type role (⅋) nominal nominal
 -- | \(\par\) is multiplicative disjunction.
 newtype a ⅋ b = Par (forall c. Y (Not b %1 -> a) (Not a %1 -> b) c -> c)
@@ -488,3 +488,6 @@ instance (Prop a, Prop b) => Prop (Noimp a b) where
 -- that can be swizzled into 'g's and 'h's?
 -- newtype DTensor :: [i] -> (i -> Type) -> Type
 -- newtype DPar :: [i] -> (i -> Type) -> Type
+--  ⊸ ⅋ 
+--newtype a ⇀ b = Partial (a ⊸ WhyNot b)
+-- a ⇀ b = Not a ⅋ WhyNot b = WhyNot b ⅋ Not a = Not (WhyNot b) ⊸ Not a = Ur b ⊸ Not a = b ⊃ Not a
