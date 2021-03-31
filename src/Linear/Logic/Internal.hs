@@ -332,115 +332,19 @@ instance (Prop a, Prop b) => Prop (a # b) where
   ApartR a nb != Iso f = f R != (a :-#> nb)
   ApartL na b != Iso f = f L != (b :-#> na)
 
-class Iso p where
-  iso :: (forall c. Y (b ⊸ a) (a ⊸ b) c -> c) %1 -> p a b
-  apart :: Not (p a b) %1 -> a # b
-
-class Iso p => Lol p where
-  lol :: (forall c. Y (Not b %1 -> Not a) (a %1 -> b) c -> c) %1 -> p a b
-  apartR :: Not (p a b) %1 -> a -#> b
-
-instance Iso (⧟) where
-  iso = Iso
-  apart = id
-
-instance Iso (⊸) where
-  iso f = f R
-  apart (a :-#> nb) = ApartR a nb
-
-instance Lol (⊸) where
-  lol = Lol
-  apartR x = x
-
-instance Iso (FUN m) where
-  iso f = \x -> fun' (f R) x
-  apart (Nofun a nb) = ApartR a nb
-
-instance Lol (FUN m) where
-  lol f = \x -> f R x
-  apartR (Nofun a nb) = a :-#> nb
-
 instance (Prep a, Prop b) => Prop (a ⊸ b) where
   type Not (a ⊸ b) = a -#> b
-  f != (a :-#> nb) = fun f a != nb
+  f != (a :-#> nb) = runLol f R a != nb
 
 instance (Prep a, Prop b) => Prop (a -#> b) where
   type Not (a -#> b) = a ⊸ b
-  (a :-#> nb) != f = fun f a != nb
+  (a :-#> nb) != f = runLol f R a != nb
 
 deriving stock instance (Show a, Show (Not b)) => Show (a -#> b)
 deriving stock instance (Read a, Read (Not b)) => Read (a -#> b)
 -- deriving stock instance (Eq a, Eq (Not b)) => Eq (a # b)
 -- deriving stock instance (Ord a, Ord (Not b)) => Ord (a # b)
 
-{-
--- | Derive a linear function for the contrapositive from a
--- linear logic impliciation.
---
--- @
--- 'unfun' :: forall a b. 'Prop' a => (a '⊸' b) %1 -> a %1 -> b
--- @
-unfun :: (a ⊸ b) %1 -> Not b %1 -> Not a
-unfun (Lol f) = f L
-{-# inline unfun #-}
--}
-
--- | Derive a linear function from a linear logic impliciation.
---
--- @
--- 'fun' :: forall a b. 'Prop' a => (a '⊸' b) %1 -> a %1 -> b
--- @
---
-fun' :: (a ⊸ b) %1 -> (a %1 -> b)
-fun' (Lol f) = lol f
-{-# inline fun' #-}
-
-fun :: (Lol l, Lol l') => l (a ⊸ b) (l' a b)
-fun = lol \case
-  L -> apartR
-  R -> \(Lol f) -> lol f
-{-# inline fun #-}
-
-lolPar :: (Iso iso, Prep a) => (a ⊸ b) `iso` (Not a ⅋ b)
-lolPar = iso \case
-  L -> lol \case
-    L -> \(a :-#> nb) -> (a, nb)
-    R -> \(Par f) -> Lol f
-  R -> lol \case
-    L -> \(a, nb) -> a :-#> nb
-    R -> \(Lol f) -> Par f
-
-contra'' :: forall l p q. (Lol l, Prep p, Prep q) => p ⊸ q %1 -> l (Not q) (Not p)
-contra'' = \(Lol f) -> lol \case
-  L -> \na -> f R na
-  R -> \nb -> f L nb
-
-contra' :: forall l l' p q. (Lol l, Lol l', Prep p, Prep q) => l (p ⊸ q) (l' (Not q) (Not p))
-contra' = lol \case
-  L -> \nf -> apartR nf & \(p :-#> nq) -> nq :-#> p
-  R -> contra''
-
-contra :: forall iso p q. (Iso iso, Prep p, Prep q) => iso (p ⊸ q) (Not q ⊸ Not p)
-contra = iso \case
-  L -> contra'
-  R -> contra'
-
-contraIso'' :: forall iso p q. (Iso iso, Prep p, Prep q) => p ⧟ q %1 -> iso (Not q) (Not p)
-contraIso'' = \(Iso f) -> iso \case
-  L -> contra' (f L)
-  R -> contra' (f R)
-
-contraIso' :: forall l iso p q. (Lol l, Iso iso, Prep p, Prep q) => l (p ⧟ q) (iso (Not q) (Not p))
-contraIso' = lol \case
-  L -> \x -> apart x & \case
-    ApartL p nq -> ApartL nq p
-    ApartR p nq -> ApartR nq p
-  R -> contraIso''
-
-contraIso :: forall iso p q. (Iso iso, Prep p, Prep q) => iso (p ⧟ q) (Not q ⧟ Not p)
-contraIso = iso \case
-  L -> contraIso'
-  R -> contraIso'
 
 -- | The \(?a\) or "why not?" modality.
 type role WhyNot nominal
@@ -458,108 +362,13 @@ because (WhyNot a) = a
 -- This embeds arbitrary non-linear Haskell values into 'Prop'.
 instance Prep a => Prop (Ur a) where
   type Not (Ur a) = WhyNot (Not a)
-  Ur a != WhyNot f = f a
+  Ur a != f = because f a
   {-# inline (!=) #-}
 
 instance Prep a => Prop (WhyNot a) where
   type Not (WhyNot a) = Ur (Not a)
-  WhyNot f != Ur a = f a
+  f != Ur a = because f a
   {-# inline (!=) #-}
-
--- |
--- @
--- 'weakenUr' :: forall p q. 'Prop' p => p ⊸ 'Ur' q ⊸ p
--- @
-weakenUr :: (Prop p, Lol l, Lol l') => l p (l' (Ur q) p)
-weakenUr = lol \case
-  L -> \x -> apartR x & \(Ur {} :-#> np) -> np
-  R -> \p -> lol \case
-    L -> \np -> p != np
-    R -> \Ur{} -> p
-{-# inline weakenUr #-}
-
-apUr :: forall p q. (Prep p, Prep q) => Ur (p ⊸ q) ⊸ Ur p ⊸ Ur q
-apUr = lol \case
-  L -> \(Ur p :-#> WhyNot nq) -> whyNot \nppq -> nq (fun nppq p)
-  R -> \(Ur nppq) -> lol \case
-    L -> \(WhyNot nq) -> whyNot \p -> nq (fun nppq p)
-    R -> \(Ur p) -> Ur (fun nppq p)
-{-# inline apUr #-}
-
-extractUr :: (Lol l, Prop p) => l (Ur p) p
-extractUr = lol \case
-  L -> \np -> whyNot \p -> p != np
-  R -> \(Ur p) -> p
-{-# inline extractUr #-}
-
-duplicateUr :: Lol l => l (Ur p) (Ur (Ur p))
-duplicateUr = lol \case
-  L -> \(WhyNot f) -> WhyNot \p -> f (Ur p)
-  R -> \(Ur p) -> Ur (Ur p)
-{-# inline duplicateUr #-}
-
-dupUr :: (Iso i, Prop a) => i (Ur a) (Ur a * Ur a)
-dupUr = iso \case
-  L -> lol \case
-    L -> \n -> par \case
-      L -> (n !=)
-      R -> (n !=)
-    R -> \(Ur a, Ur{}) -> (Ur a)
-  R -> lol \case
-    L -> \p -> WhyNot \a -> because (parR' p (Ur a)) a
-    R -> \(Ur a) -> (Ur a, Ur a)
-
-contractUr :: (Prep p, Prop q) => (Ur p ⊸ Ur p ⊸ q) ⊸ Ur p ⊸ q
-contractUr = lol \case
-  L -> \(Ur p :-#> nq) -> (Ur p :-#> (Ur p :-#> nq))
-  R -> \x -> lol \case
-    L -> \nq -> whyNot \p -> contra' (fun x (Ur p)) nq != Ur p
-    R -> \(Ur p) -> fun (fun x (Ur p)) (Ur p)
-{-# inline contractUr #-}
-
-returnWhyNot :: (Lol l, Prop p) => l p (WhyNot p)
-returnWhyNot = contra' extractUr
-{-# inline returnWhyNot #-}
-
-joinWhyNot :: (Lol l, Prep p) => l (WhyNot (WhyNot p)) (WhyNot p)
-joinWhyNot = contra' duplicateUr
-{-# inline joinWhyNot #-}
-
-withL :: Lol l => l (a & b) a
-withL = lol \case
-  L -> Left
-  R -> withL'
-
-withR :: Lol l => l (a & b) b
-withR = lol \case
-  L -> Right
-  R -> withR'
-
-left :: Lol l => l a (a + b)
-left = lol \case
-  L -> withL'
-  R -> Left
-
-right :: Lol l => l b (a + b)
-right = lol \case
-  L -> withR'
-  R -> Right
-
-parR :: (Lol l, Lol l', Prep a) => l (a ⅋ b) (l' (Not a) b)
-parR = lol \case
-  L -> \g -> apartR g & \(x :-#> y) -> (x, y)
-  R -> \p -> lol \case
-    L -> parL' p
-    R -> parR' p
-
-parL :: (Lol l, Lol l', Prep b) => l (a ⅋ b) (l' (Not b) a)
-parL = lol \case
-  L -> \g -> apartR g & \(x :-#> y) -> (y, x)
-  R -> \p -> lol \case
-    L -> parR' p
-    R -> parL' p
-
-
 
 newtype DWith f g = DWith (forall x. f x %1 -> g x)
 
@@ -646,6 +455,14 @@ instance (IProp f, IProp g) => IProp (f :⅋: g) where
   icontradict (IPar h) (f :*: g) = icontradict (h R f) g
   inot = Refl
 
+-- a -> WhyNot b = Neg a `par` WhyNot b = WhyNot b `par` Neg a = Ur b -> Neg a
+-- Not (a -> WhyNot b) = Neg (Neg a `par` WhyNot b)
+--  = (a, Ur b)
+--
+-- Ur a -> b = Neg (Ur a) `par` b = WhyNot a `par` b
+
+
+
 -- FTensor would match hkd. DFoo would match dependent-sum, dependent-hashmap. change hkd?
 -- we need some way to talk about a partitioning/swizzling of a list into two lists
 -- then you can project out subsets of the rows with a swizzle. then this generalizes to 'f's
@@ -653,135 +470,4 @@ instance (IProp f, IProp g) => IProp (f :⅋: g) where
 -- newtype DTensor :: [i] -> (i -> Type) -> Type
 -- newtype DPar :: [i] -> (i -> Type) -> Type
 
-
---------------------------------------------------------------------------------
--- Interplay between connectives that needs weakening
---------------------------------------------------------------------------------
-
-tensorToWith
-  :: (Lol l, Prop p, Consumable p, Prop q, Consumable q)
-  => l (p * q) (p & q)
-tensorToWith = lol \case
-  L -> \case
-    Left np -> par \case
-      L -> \q -> lseq q np
-      R -> \p -> p != np
-    Right nq -> par \case
-      L -> \q -> q != nq
-      R -> \p -> lseq p nq
-  R -> \(p, q) -> with \case
-    L -> lseq q p
-    R -> lseq p q
-
-eitherToPar
-  :: (Lol l, Consumable p, Consumable q, Prop p, Prop q)
-  => l (Not p + Not q) (Not p ⅋ Not q)
-eitherToPar = contra' tensorToWith
-
---------------------------------------------------------------------------------
--- Excluded middle and decidability
---------------------------------------------------------------------------------
-
--- | multiplicative excluded-middle, equivalent to multiplicative law of non-contradiction
-mem :: Prep p => p ⅋ Not p
-mem = par \case L -> \x -> x; R -> \x -> x
-
--- | additive excluded middle, or additive law of non-contradiction is a property of a proposition
--- not a law.
-type Decidable p = p + Not p
-
---------------------------------------------------------------------------------
--- Ur is a Seely comonad
---------------------------------------------------------------------------------
-
-seely'' :: Ur (p & q) %1 -> Ur p * Ur q
-seely'' = \(Ur pwq) -> (Ur (withL pwq), Ur (withR pwq))
-
-unseely'' :: (Ur p * Ur q) %1 -> Ur (p & q)
-unseely'' = \(Ur p, Ur q) -> Ur (with \case L -> p; R -> q)
-
-contraseely'' :: WhyNot p ⅋ WhyNot q %1 -> WhyNot (p + q)
-contraseely'' = \r -> WhyNot \pwq -> because (parL' r (Ur (withR pwq))) (withL pwq)
-
-contraunseely'' :: WhyNot (p + q) %1 -> WhyNot p ⅋ WhyNot q
-contraunseely'' = \n -> par \case
-  L -> \(Ur q) -> WhyNot \p -> because n (with \case L -> p; R -> q)
-  R -> \(Ur p) -> WhyNot \q -> because n (with \case L -> p; R -> q)
-
-seely' :: Lol l => l (Ur (p & q)) (Ur p * Ur q)
-seely' = lol \case L -> contraseely''; R -> seely''
-
-unseely' :: Lol l => l (Ur p * Ur q) (Ur (p & q))
-unseely' = lol \case L -> contraunseely''; R -> unseely''
-
--- contraseely' :: Lol l => l (WhyNot p ⅋ WhyNot q) (WhyNot (p + q))
--- contraseely' = lol \case L -> seely''; R -> contraseely''
-
--- contraunseely' :: Lol l => l (WhyNot (p + q)) (WhyNot p ⅋ WhyNot q)
--- contraunseely' = lol \case L -> unseely''; R -> contraunseely''
-
--- | \(!\) is a <https://ncatlab.org/nlab/files/SeelyLinearLogic.pdf Seely comonad>
---
--- A seely comonad is a strong monoidal functor from cartesian monoidal structure to
--- symmetric monoidal structure.
-seely :: Iso i => i (Ur (p & q)) (Ur p * Ur q)
-seely = iso \case L -> unseely'; R -> seely'
-
--- contraseely :: Iso i => i (WhyNot p ⅋ WhyNot q) (WhyNot (p + q))
--- contraseely = iso \case L -> contraunseely'; R -> contraseely'
-
-seelyTop'' :: Ur Top %1 -> ()
-seelyTop'' = consume
-
-contraunseelyTop'' :: WhyNot Void %1 -> Bot
-contraunseelyTop'' = \n -> because n (Top ())
-
-contraseelyTop'' :: Bot %1 -> WhyNot Void
-contraseelyTop'' = \(Bot f) -> WhyNot \top -> f top
-
-unseelyTop'' :: () %1 -> Ur Top
-unseelyTop'' = \() -> Ur (Top ())
-
-seelyTop :: Iso iso => iso (Ur Top) ()
-seelyTop = iso \case
-  L -> lol \case
-    L -> contraunseelyTop''
-    R -> unseelyTop''
-  R -> lol \case
-    L -> contraseelyTop''
-    R -> seelyTop''
-
--- | valid in a semicartesian *-autonomous lattice
---
--- This is generally not valid in linear logic, but holds
--- in affine logic, and seems to hold here.
-semiseely :: (Iso i, Prep p) => i (Ur (p * q)) (Ur p * Ur q)
-semiseely = iso \case
-  L -> lol \case
-    L -> \k -> par \case
-      L -> \(Ur q) -> WhyNot \p -> because k (p, q)
-      R -> \(Ur p) -> WhyNot \q -> because k (p, q)
-    R -> \(Ur p, Ur q) -> Ur (p, q)
-  R -> lol \case
-    L -> \x -> WhyNot \(p,q) -> because (parR' x (Ur p)) q
-    R -> \(Ur (p, q)) -> (Ur p, Ur q)
-
-semiseelyUnit :: Iso i => i (Ur ()) ()
-semiseelyUnit = iso \case
-  L -> lol \case
-    L -> \n -> because n ()
-    R -> \() -> Ur ()
-  R -> lol \case
-    L -> \b -> WhyNot \p -> b != p
-    R -> \(Ur ()) -> ()
-
-{- nonsense
-type a -&> b = Not a ⊸ b
-
-curryWith'' :: Lol l => (a & b ⊸ c) %1 -> l a (b -&> c)
-curryWith'' f = lol \case
-  R -> \a -> lol \case 
-    R -> \nb -> _ (fun f) a nb
-  L -> _ f
--}
 

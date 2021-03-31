@@ -103,6 +103,18 @@ class
 fmap :: (Functor f, Prop a, Prop b, Lol l) => (a ⊸ b) -> l (f a) (f b)
 fmap  f = fmap' (Ur f)
 
+fmapIso' :: (Functor f, Prop a, Prop b, Lol l, Iso i) => l (Ur (a ⧟ b)) (i (f a) (f b))
+fmapIso' = lol \case
+  L -> \ni -> apart ni & \case
+    ApartL nfa fb -> whyNot \a2b -> fmap (inv' a2b) fb != nfa
+    ApartR fa nfb -> whyNot \a2b -> fmap (funIso a2b) fa != nfb
+  R -> \(Ur a2b) -> iso \case
+    L -> fmap (inv' a2b)
+    R -> fmap (funIso a2b)
+
+fmapIso :: (Functor f, Prop a, Prop b, Iso i) => (a ⧟ b) -> i (f a) (f b)
+fmapIso f = fmapIso' (Ur f)
+
 instance Functor (FUN m a) where
   fmap' = lol \case
     L -> \nf -> apartR nf & \(a2b :-#> Nofun a nc) -> WhyNot \c2b -> a2b a != runLol c2b L nc
@@ -121,6 +133,7 @@ instance Prop x => Functor ((,) x) where
       R -> \(x, a) -> (x, fun f a)
 
 instance Prop x => Functor ((⊸) x) where
+  -- fmap' = fun (dimap lolPar (inv' lolPar) . fmap')
   fmap' = lol \case
     L -> \nf -> apartR nf & \(x2a :-#> x :-#> nb) ->
       WhyNot \a2b -> fun' a2b (fun' x2a x) != nb
@@ -129,6 +142,65 @@ instance Prop x => Functor ((⊸) x) where
       R -> linear \g -> lol \case
         L -> linear \nb -> contra' g (contra' f nb)
         R -> \a -> fun' f (fun' g a)
+
+class Functor f => MFunctor f where
+  mfmap :: (Prop a, Prop b, Lol l, Lol l') =>  l (a ⊸ b) (l' (f a) (f b))
+
+mfmapTensor' :: (Prop x, Prop a, Prop b, Lol l) => (a ⊸ b) %1 -> l (x, a) (x, b)
+mfmapTensor' = \a2b -> lol \case
+  L -> \nxpnb -> par \case
+    L -> \a -> parL nxpnb (fun' a2b a)
+    R -> \x -> contra' a2b (parR nxpnb x)
+  R -> \(x,a) -> (x, fun' a2b a)
+
+mfmapIso' :: (MFunctor f, Prop a, Prop b, Lol l, Iso i) => l (a ⧟ b) (i (f a) (f b))
+mfmapIso' = lol \case
+  L -> \ni -> apart ni & \case
+    ApartR fa nfb -> apart (contra' mfmap (fa :-#> nfb))
+    ApartL nfa fb -> swap $ apart (contra' mfmap (fb :-#> nfa))
+  R -> \a2b -> iso \case
+    L -> mfmap (runIso a2b L)
+    R -> mfmap (runIso a2b R)
+
+{-
+mfmapIso :: (MFunctor f, Prop a, Prop b, Iso i) => i (a ⧟ b) (f a ⧟ f b)
+mfmapIso = iso \case
+  L -> lol \case
+    L -> \case
+      ApartR a nb -> _ a nb
+    R -> _
+  R -> mfmapIso'
+-}
+  
+
+
+instance Prop x => MFunctor ((,) x) where
+  mfmap = lol \case
+    L -> \nf -> apartR nf & \((x,a) :-#> nxpnb) -> 
+      a :-#> (parR' nxpnb x)
+    R -> mfmapTensor'
+
+instance Prop x => MFunctor ((⅋) x) where
+  mfmap = lol \case
+    L -> \nf -> apartR nf & \(xpa :-#> (nx, nb)) -> 
+      parR xpa nx :-#> nb
+    R -> contra' . mfmapTensor' . contra'
+
+-- lolPar :: (Iso iso, Prep a) => (a ⊸ b) `iso` (Not a ⅋ b)
+
+instance Prop x => MFunctor ((⊸) x) where
+  mfmap = lol \case
+    L -> \nf -> apartR nf & \(x2a :-#> x :-#> nb) -> fun' x2a x :-#> nb
+    R -> \a2b -> lol \case
+      L -> \(x :-#> nb) -> x :-#> contra' a2b nb
+      R -> (a2b .)
+
+instance MFunctor (FUN 'One x) where
+  mfmap = lol \case
+    L -> \nf -> apartR nf & \(x2a :-#> Nofun x nb) -> x2a x :-#> nb
+    R -> \(a2b :: a ⊸ b) -> lol \case
+      L -> linear \(Nofun x nb) -> Nofun x (contra' a2b nb)
+      R -> \x2a x -> fun' a2b (x2a x)
 
 instance Functor Ur where
   fmap' = lol \case
@@ -208,6 +280,7 @@ class
     :: (Prop a, Prop b, Prop c, Prop d, Lol l, Lol l', Lol l'')
     => l (Ur (a ⊸ b)) (l' (Ur (c ⊸ d)) (l'' (t b c) (t a d)))
 
+
 dimap :: (Profunctor t, Prop a, Prop b, Prop c, Prop d, Lol l)
     => (a ⊸ b) -> (c ⊸ d) -> l (t b c) (t a d)
 dimap f g = dimap' (Ur f) (Ur g)
@@ -240,12 +313,29 @@ instance Profunctor (FUN m) where
           go :: Nofun m a d %1 -> Nofun m b c
           go (Nofun a nd) = Nofun (fun' a2b a) (contra' c2d nd)
 
+class Profunctor t => MProfunctor t where
+  mdimap
+    :: (Prop a, Prop b, Prop c, Prop d, Lol l, Lol l', Lol l'')
+    => l (a ⊸ b) (l' (c ⊸ d) (l'' (t b c) (t a d)))
+
+{-
+instance MProfunctor (⊸) where
+  mdimap = lol \case
+    L -> _
+    R -> _
+
+instance MProfunctor (FUN 'One) where
+-}
+
 class
   ( forall a. Prop a => Functor (t a)
   ) => Bifunctor t where
   bimap'
     :: (Prop a, Prop b, Prop c, Prop d, Lol l, Lol l', Lol l'')
     => l (Ur (a ⊸ b)) (l' (Ur (c ⊸ d)) (l'' (t a c) (t b d)))
+
+ 
+ 
 
 bimap
   :: (Bifunctor t, Prop a, Prop b, Prop c, Prop d, Lol l)
