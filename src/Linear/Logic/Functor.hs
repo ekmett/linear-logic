@@ -175,7 +175,7 @@ instance Functor (FUN m a) where
 
 instance Prop x => Functor ((⊃) x) where
   fmap' = lol \case
-    L -> \nf -> apartR nf & \(xia :-#> Noimp x nb) -> 
+    L -> \nf -> apartR nf & \(xia :-#> Noimp x nb) ->
       WhyNot \a2b -> fun' a2b (runImp xia R x) != nb
     R -> \(Ur a2b) -> lol \case
       L -> linear \(Noimp x nb) -> Noimp x (contra' a2b nb)
@@ -225,13 +225,13 @@ mfmapIso = lol \case
 
 instance Prop x => MFunctor ((,) x) where
   mfmap = lol \case
-    L -> \nf -> apartR nf & \((x,a) :-#> nxpnb) -> 
+    L -> \nf -> apartR nf & \((x,a) :-#> nxpnb) ->
       a :-#> (parR' nxpnb x)
     R -> mfmapTensor'
 
 instance Prop x => MFunctor ((⅋) x) where
   mfmap = lol \case
-    L -> \nf -> apartR nf & \(xpa :-#> (nx, nb)) -> 
+    L -> \nf -> apartR nf & \(xpa :-#> (nx, nb)) ->
       parR xpa nx :-#> nb
     R -> contra' . mfmapTensor' . contra'
 
@@ -335,7 +335,7 @@ dimap
   => (a ⊸ b) -> (c ⊸ d) -> l (t b c) (t a d)
 dimap f g = dimap' (Ur f) (Ur g)
 
-dimapIso' 
+dimapIso'
   :: (Profunctor t, Prop a, Prop b, Prop c, Prop d, Lol l, Lol l', Iso i)
   => l (Ur (a ⧟ b)) (l' (Ur (c ⧟ d)) (i (t b c) (t a d)))
 dimapIso' = lol \case
@@ -351,11 +351,11 @@ dimapIso' = lol \case
       L -> dimap (runIso ab L) (runIso cd L)
       R -> dimap (runIso ab R) (runIso cd R)
 
-dimapIso 
+dimapIso
   :: (Profunctor t, Prop a, Prop b, Prop c, Prop d, Iso i)
   => (a ⧟ b) -> (c ⧟ d) -> i (t b c) (t a d)
 dimapIso f g = dimapIso' (Ur f) (Ur g)
-  
+
 instance Profunctor (⊸) where
   dimap' = lol \case
     L -> \nf -> apartR nf & \case
@@ -385,10 +385,18 @@ instance Profunctor (FUN m) where
           go (Nofun a nd) = Nofun (fun' a2b a) (contra' c2d nd)
 
 instance Profunctor (⊃) where
-{- TODO: FINISH ME
   dimap' = lol \case
-    L -> \nf -> apartR nf & _
--}
+    L -> \ni -> apartR ni & \((Ur c2d) :-#> nj) ->
+      apartR nj & \(bic :-#> Noimp a nd) ->
+        WhyNot \a2b -> bic != Noimp (fun' a2b a) (contra' c2d nd)
+    R -> \(Ur (a2b :: a  ⊸ b)) -> lol \case
+      L -> \ng -> apartR ng & \(bic :-#> Noimp a nd) ->
+        WhyNot \c2d -> bic != Noimp (fun' a2b a) (contra' c2d nd)
+      R -> \(Ur (c2d :: c ⊸ d)) -> lol \case
+        L -> linear \(Noimp a nd) -> Noimp (fun' a2b a) (contra' c2d nd)
+        R -> \bic -> imp \case
+          L -> linear \nd -> WhyNot \a -> bic != Noimp (fun' a2b a) (contra' c2d nd)
+          R -> \a -> fun' c2d (impR' bic (fun' a2b a))
 
 class Profunctor t => MProfunctor t where
   mdimap
@@ -420,7 +428,7 @@ bimap
   => (a ⊸ b) -> (c ⊸ d) -> l (t a c) (t b d)
 bimap f g = bimap' (Ur f) (Ur g)
 
-bimapIso' 
+bimapIso'
   :: (Bifunctor t, Prop a, Prop b, Prop c, Prop d, Lol l, Lol l', Iso i)
   => l (Ur (a ⧟ b)) (l' (Ur (c ⧟ d)) (i (t a c) (t b d)))
 bimapIso' = lol \case
@@ -436,7 +444,7 @@ bimapIso' = lol \case
       L -> bimap (runIso ab L) (runIso cd L)
       R -> bimap (runIso ab R) (runIso cd R)
 
-bimapIso 
+bimapIso
   :: (Bifunctor t, Prop a, Prop b, Prop c, Prop d, Iso i)
   => (a ⧟ b) -> (c ⧟ d) -> i (t a c) (t b d)
 bimapIso f g = bimapIso' (Ur f) (Ur g)
@@ -991,7 +999,7 @@ inv' = lol \case
 
 inv :: (Iso i) => i (a ⧟ b) (b ⧟ a)
 inv = iso \case L -> inv'; R -> inv'
-  
+
 swapApart'' :: a # b %1 -> b # a
 swapApart'' (ApartL na b) = ApartR b na
 swapApart'' (ApartR a nb) = ApartL nb a
@@ -1010,12 +1018,12 @@ curryTensor'
   :: (Lol l, Lol l', Lol l'', Prep a, Prep b, Prep c)
   => l ((a * b) ⊸ c) (l' a (l'' b c))
 curryTensor' = lol \case
-  L -> \nf -> apartR nf & 
+  L -> \nf -> apartR nf &
     \(a :-#> y) -> apartR y &
       \(b :-#> nc) -> (a,b) :-#> nc
   R -> \f -> lol \case
     L -> \nbc -> apartR nbc &
-      \(b :-#> nc) -> parL (contra' f nc) b 
+      \(b :-#> nc) -> parL (contra' f nc) b
     R -> \a -> lol \case
       L -> \nc -> parR (contra' f nc) a
       R -> \b -> fun f (a, b)
@@ -1283,7 +1291,7 @@ type a -&> b = Not a ⊸ b
 
 curryWith'' :: Lol l => (a & b ⊸ c) %1 -> l a (b -&> c)
 curryWith'' f = lol \case
-  R -> \a -> lol \case 
+  R -> \a -> lol \case
     R -> \nb -> _ (fun f) a nb
   L -> _ f
 
