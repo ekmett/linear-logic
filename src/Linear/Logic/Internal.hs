@@ -290,8 +290,11 @@ type (%->) = FUN 'One
 -- type p ⊸ q = Not p ⅋ q
 newtype a ⊸ b = Lol (forall c. Y (Not b %1 -> Not a) (a %1 -> b) c -> c)
 
-data a -#> b where (:-#>) :: a %1 -> Not b %1 -> a -#> b
-infixr 3 -#>, :-#>
+data b <#- a where (:-#>) :: a %1 -> Not b %1 -> b <#- a
+
+-- data a -#> b where (:-#>) :: a %1 -> Not b %1 -> a -#> b
+infixl 0 <#-
+infixr 3 :-#>
 
 newtype a ⧟ b = Iso (forall c. Y (b ⊸ a) (a ⊸ b) c -> c)
 infixr 0 ⧟
@@ -333,15 +336,15 @@ instance (Prop a, Prop b) => Prop (a # b) where
   ApartL na b != Iso f = f L != (b :-#> na)
 
 instance (Prep a, Prop b) => Prop (a ⊸ b) where
-  type Not (a ⊸ b) = a -#> b
+  type Not (a ⊸ b) = b <#- a
   f != (a :-#> nb) = runLol f R a != nb
 
-instance (Prep a, Prop b) => Prop (a -#> b) where
-  type Not (a -#> b) = a ⊸ b
+instance (Prep a, Prop b) => Prop (b <#- a) where
+  type Not (b <#- a) = a ⊸ b
   (a :-#> nb) != f = runLol f R a != nb
 
-deriving stock instance (Show a, Show (Not b)) => Show (a -#> b)
-deriving stock instance (Read a, Read (Not b)) => Read (a -#> b)
+deriving stock instance (Show a, Show (Not b)) => Show (b <#- a)
+deriving stock instance (Read a, Read (Not b)) => Read (b <#- a)
 -- deriving stock instance (Eq a, Eq (Not b)) => Eq (a # b)
 -- deriving stock instance (Ord a, Ord (Not b)) => Ord (a # b)
 

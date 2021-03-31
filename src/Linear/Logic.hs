@@ -43,7 +43,7 @@ module Linear.Logic
 , type (⊸)(..)
 , Lol(..), runLol, fun', fun, lolPar, contra, contra', contra''
 , type (%->)
-, type (-#>)(..)
+, type (<#-)(..)
 -- equality and apartness
 , Iso(..), runIso, contraIso, contraIso', contraIso''
 , type (⧟)(..)

@@ -50,7 +50,7 @@ class Iso p where
 
 class (Iso p, Profunctor p) => Lol p where
   lol :: (forall c. Y (Not b %1 -> Not a) (a %1 -> b) c -> c) %1 -> p a b
-  apartR :: Not (p a b) %1 -> a -#> b
+  apartR :: Not (p a b) %1 -> b <#- a
 
 instance Iso (⧟) where
   iso = Iso
@@ -311,13 +311,19 @@ instance Prop e => Adjunction ((,) e) ((⊸) e) where
     L -> uncurryTensor' . flip
     R -> flip . curryTensor'
 
+instance Prop b => Functor ((<#-) b) where
+  fmap' = lol \case
+    L -> \nk -> apartR nk & \case
+      (a :-#> nb) :-#> c2b -> WhyNot \a2c -> fun' c2b (fun' a2c a) != nb
+    R -> \(Ur a2c) -> lol \case
+      L -> \c2b -> c2b . a2c
+      R -> linear \(a :-#> nb) -> fun' a2c a :-#> nb
+
 class
   ( forall a. Prop a => Prop (f a)
   ) => Contravariant f where
   contramap' :: (Prop a, Prop b, Lol l, Lol l') => l (Ur (a ⊸ b)) (l' (f b) (f a))
 
-instance Prop a => Contravariant ((-#>) a) where
-  contramap' = fun (contra' . fmap')
 
 contramap :: (Contravariant f, Prop a, Prop b, Lol l) => (a ⊸ b) -> l (f b) (f a)
 contramap f = contramap' (Ur f)
@@ -367,6 +373,20 @@ instance Profunctor (⊸) where
       R -> \(Ur g) -> lol \case
         L -> linear \(a :-#> nd) -> fun' f a :-#> contra' g nd
         R -> linear \h -> g . h . f
+
+instance Profunctor (<#-) where
+  dimap' = lol \case
+    L -> \ni -> apartR ni & \((Ur c2d) :-#> nj) -> 
+      apartR nj & \((c :-#> nb) :-#> d2a) -> 
+        WhyNot \a2b -> fun' a2b (fun' d2a (fun' c2d c)) != nb
+    R -> \(Ur a2b) -> lol \case
+      L -> \ni -> apartR ni & \((c :-#> nb) :-#> d2a) -> 
+        WhyNot \c2d -> fun' a2b (fun' d2a (fun' c2d c)) != nb
+      R -> \(Ur c2d) -> lol \case
+        L -> \d2a -> lol \case
+          L -> linear \nb -> contra' c2d (contra' d2a (contra' a2b nb))
+          R -> \c -> fun' a2b (fun' d2a (fun' c2d c))
+        R -> linear \(c :-#> nb) -> fun' c2d c :-#> contra' a2b nb
 
 instance Profunctor (FUN m) where
   dimap' = lol \case
