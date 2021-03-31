@@ -488,5 +488,3 @@ instance (Prop a, Prop b) => Prop (Noimp a b) where
 -- that can be swizzled into 'g's and 'h's?
 -- newtype DTensor :: [i] -> (i -> Type) -> Type
 -- newtype DPar :: [i] -> (i -> Type) -> Type
-
-

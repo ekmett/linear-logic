@@ -1,34 +1,6 @@
-{-# language BlockArguments #-}
-{-# language ConstraintKinds #-}
-{-# language DerivingStrategies #-}
-{-# language EmptyCase #-}
 {-# language ExplicitNamespaces #-}
-{-# language FlexibleContexts #-}
-{-# language ViewPatterns #-}
-{-# language FlexibleInstances #-}
-{-# language DataKinds #-}
-{-# language NoImplicitPrelude #-}
-{-# language GADTs #-}
-{-# language LambdaCase #-}
-{-# language LinearTypes #-}
 {-# language NoStarIsType #-}
-{-# language ImportQualifiedPost #-}
-{-# language PolyKinds #-}
-{-# language QuantifiedConstraints #-}
-{-# language RankNTypes #-}
-{-# language RoleAnnotations #-}
 {-# language Trustworthy #-}
-{-# language StandaloneDeriving #-}
-{-# language StandaloneKindSignatures #-}
-{-# language StrictData #-}
-{-# language TupleSections #-}
-{-# language TypeApplications #-}
-{-# language TypeFamilies #-}
-{-# language TypeFamilyDependencies #-}
-{-# language TypeOperators #-}
-{-# language UndecidableInstances #-}
-{-# language UndecidableSuperClasses #-}
-{-# options_ghc -Wno-unused-imports #-} -- toLinear
 
 -- |
 -- <https://arxiv.org/pdf/1805.07518.pdf Linear Logic for Constructive Mathematics>
