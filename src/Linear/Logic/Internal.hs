@@ -455,13 +455,32 @@ instance (IProp f, IProp g) => IProp (f :⅋: g) where
   icontradict (IPar h) (f :*: g) = icontradict (h R f) g
   inot = Refl
 
--- a -> WhyNot b = Neg a `par` WhyNot b = WhyNot b `par` Neg a = Ur b -> Neg a
--- Not (a -> WhyNot b) = Neg (Neg a `par` WhyNot b)
---  = (a, Ur b)
---
--- Ur a -> b = Neg (Ur a) `par` b = WhyNot a `par` b
+newtype a ⊃ b = Imp (forall c. (Prop a, Prop b) => Y (Not b %1 -> WhyNot (Not a)) (a -> b) c -> c)
 
+infixr 0 ⊃
 
+imp :: (forall c. (Prop a, Prop b) => Y (Not b %1 -> WhyNot (Not a)) (a -> b) c -> c) %1 -> a ⊃ b
+imp = Imp
+
+runImp :: (Prop a, Prop b) => (a ⊃ b) %1 -> Y (Not b %1 -> WhyNot (Not a)) (a -> b) c -> c
+runImp (Imp f) = f
+
+impR' :: (Prop a, Prop b) => (a ⊃ b) %1 -> a -> b
+impR' f = runImp f R
+
+impL' :: (Prop a, Prop b) => (a ⊃ b) %1 -> Not b %1 -> WhyNot (Not a)
+impL' f = runImp f L
+
+data Noimp a b where
+  Noimp :: a -> Not b %1 -> Noimp a b
+
+instance (Prop a, Prop b) => Prop (a ⊃ b) where
+  type Not (a ⊃ b) = Noimp a b
+  f != Noimp a b = runImp f R a != b
+
+instance (Prop a, Prop b) => Prop (Noimp a b) where
+  type Not (Noimp a b) = a ⊃ b
+  Noimp a b != f = runImp f R a != b
 
 -- FTensor would match hkd. DFoo would match dependent-sum, dependent-hashmap. change hkd?
 -- we need some way to talk about a partitioning/swizzling of a list into two lists
