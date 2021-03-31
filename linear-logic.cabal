@@ -66,7 +66,6 @@ library
     Linear.Logic.Functor
     Linear.Logic.Internal
     Linear.Logic.Orphans
-    Linear.Logic.Ops
     Linear.Logic.Unsafe
     Linear.Logic.Y
   ghc-options:

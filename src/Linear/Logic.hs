@@ -119,7 +119,7 @@ import Data.Dependent.Sum
 import GHC.Generics
 import Prelude.Linear hiding (Sum)
 import Linear.Logic.Internal
-import Linear.Logic.Ops
+import Linear.Logic.Functor
 import Linear.Logic.Y
 import Data.Void
 
