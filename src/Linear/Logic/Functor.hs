@@ -31,56 +31,83 @@
 {-# language ImportQualifiedPost #-}
 {-# language Trustworthy #-}
 
+
+
 -- {-# options_ghc -Wno-unused-imports #-}
 
 module Linear.Logic.Functor where
 
+import Data.Type.Equality
 import Data.Void
 import Data.Kind
 import GHC.Types
--- import Control.Category qualified as Control
 import Linear.Logic.Internal
 import Linear.Logic.Y
 import Prelude.Linear hiding (id,(.),flip)
--- import Unsafe.Linear
---
-class Iso p where
-  iso :: (forall c. Y (b ⊸ a) (a ⊸ b) c -> c) %1 -> p a b
-  apart :: Not (p a b) %1 -> a # b
 
-class (Iso p, Profunctor p) => Lol p where
+type family NotApart (p :: Type -> Type -> Type) :: Type -> Type -> Type
+
+class 
+  ( forall a b. (Prop a, Prop b) => Prop (p a b)
+  , NotApart (NotIso p) ~ p
+  ) => Iso p where
+  type NotIso p = (q :: Type -> Type -> Type) | q -> p
+  iso :: (forall c. Y (b ⊸ a) (a ⊸ b) c -> c) %1 -> p a b
+  apart :: Not (p a b) %1 -> b # a
+  notIso :: NotIso p b a :~: Not (p a b)
+  notApart :: NotApart (NotIso p) a b :~: p a b
+
+class (Iso p, Profunctor p) => Lol (p :: Type -> Type -> Type) where
   lol :: (forall c. Y (Not b %1 -> Not a) (a %1 -> b) c -> c) %1 -> p a b
   apartR :: Not (p a b) %1 -> b <#- a
 
+type instance NotApart (#) = (⧟)
 instance Iso (⧟) where
+  type NotIso (⧟) = (#)
   iso = Iso
   apart = \x -> x
+  notIso = Refl
+  notApart = Refl
 
+type instance NotApart (<#-) = (⊸)
 instance Iso (⊸) where
+  type NotIso (⊸) = (<#-) 
   iso f = f R
   apart (a :-#> nb) = ApartR a nb
+  notIso = Refl
+  notApart = Refl
 
+type instance NotApart Noimp = (⊃)
 instance Iso (⊃) where
+  type NotIso (⊃) = Noimp
   iso f = Imp \case
     R -> fun (f R)
     L -> \nb -> whyNot \a -> a != runLol (f R) L nb
   apart (Noimp a nb) = ApartR a nb
+  notIso = Refl
+  notApart = Refl
 
 instance Lol (⊸) where
   lol = Lol
   apartR x = x
 
+type instance NotApart (Nofun m) = FUN m
+
 instance Iso (FUN m) where
+  type NotIso (FUN m) = Nofun m
   iso f = \x -> fun' (f R) x
   apart (Nofun a nb) = ApartR a nb
+  notIso = Refl
+  notApart = Refl
+
 
 instance Lol (FUN m) where
-  lol f = \x -> f R x
+  lol f = \x -> linear (f R) x
   apartR (Nofun a nb) = a :-#> nb
 
 instance Lol (⊃) where
   lol f = Imp \case
-    R -> \x -> f R x
+    R -> \x -> linear (f R) x
     L -> \nb -> whyNot \a -> a != f L nb
   apartR (Noimp a nb) = a :-#> nb
 
@@ -94,6 +121,17 @@ fun' :: (a ⊸ b) %1 -> (a %1 -> b)
 fun' (Lol f) = lol f
 {-# inline fun' #-}
 
+fun :: (Lol l, Lol l') => l (a ⊸ b) (l' a b)
+fun = lol \case
+  L -> apartR
+  R -> \(Lol f) -> lol f
+{-# inline fun #-}
+
+funIso :: (Lol l, Iso i) => l (a ⧟ b) (i a b)
+funIso = lol \case
+  L -> apart
+  R -> \(Iso f) -> iso f
+
 class Category p where
   id :: Prop a => p a a
   (.) :: (Prop a, Prop b, Prop c) => p b c %1 -> p a b %1 -> p a c
@@ -104,17 +142,8 @@ instance Category (FUN 'One) where
 
 -- | Here we have the ability to provide more refutations, because we can walk
 -- all the way back to my arrows. This is internal to my logic.
-class NiceCategory p where
+class (forall a b. (Prop a, Prop b) => Prop (p a b)) => NiceCategory p where
   o :: (Lol l, Lol l', Prop a, Prop b, Prop c) => l (p b c) (l' (p a b) (p a c))
-
-{-
-instance NiceCategory (FUN 'One) where
-  o = lol \case
-    L -> \nf -> apartR nf & \(a2b :-#> Nofun a nc) -> Nofun (a2b a) nc
-    R -> \bc -> lol \case
-      L -> \(Nofun a nc) -> _ a bc nc -- impossible, requires mapping nc back through b %1 -> c
-      R -> _ bc
--}
 
 instance Category (⊸) where
   id = Lol \case L -> id; R -> id
@@ -186,12 +215,12 @@ instance Prop x => Functor ((⊃) x) where
 instance Prop x => Functor ((,) x) where
   fmap' = lol \case
     L -> \nf -> apartR nf & \((x,a) :-#> nxpnb) ->
-      WhyNot \a2b -> x != parL nxpnb (fun a2b a)
+      WhyNot \a2b -> x != parL' nxpnb (fun' a2b a)
     R -> \(Ur f) -> lol \case
       L -> \nxpnb -> par \case
-        L -> \a -> parL' nxpnb (fun f a)
+        L -> \a -> parL' nxpnb (fun' f a)
         R -> \x -> contra' f (parR' nxpnb x)
-      R -> \(x, a) -> (x, fun f a)
+      R -> \(x, a) -> (x, fun' f a)
 
 instance Prop x => Functor ((⊸) x) where
   -- fmap' = fun (dimap lolPar (inv' lolPar) . fmap')
@@ -210,8 +239,8 @@ class Functor f => MFunctor f where
 mfmapTensor' :: (Prop x, Prop a, Prop b, Lol l) => (a ⊸ b) %1 -> l (x, a) (x, b)
 mfmapTensor' = \a2b -> lol \case
   L -> \nxpnb -> par \case
-    L -> \a -> parL nxpnb (fun' a2b a)
-    R -> \x -> contra' a2b (parR nxpnb x)
+    L -> \a -> parL' nxpnb (fun' a2b a)
+    R -> \x -> contra' a2b (parR' nxpnb x)
   R -> \(x,a) -> (x, fun' a2b a)
 
 mfmapIso :: (MFunctor f, Prop a, Prop b, Lol l, Iso i) => l (a ⧟ b) (i (f a) (f b))
@@ -261,8 +290,9 @@ instance Functor Ur where
 
 instance Functor WhyNot where
   fmap' = lol \case
-    L -> \nf -> apartR nf & \(wna :-#> Ur nb) ->
-      WhyNot \a2b -> because wna (contra' a2b nb)
+    L -> \nf -> apartR nf & \case
+      wna :-#> Ur nb ->
+        whyNot \a2b -> because wna (contra' a2b nb)
     R -> \(Ur f) -> lol \case
       L -> \(Ur nb) -> Ur (contra' f nb)
       R -> \na2v -> whyNot \nb -> because na2v (contra' f nb)
@@ -270,8 +300,8 @@ instance Functor WhyNot where
 instance Prop a => Functor (Either a) where
   fmap' = lol \case
     L -> \nf -> apartR nf & \case
-      Left a :-#> g -> WhyNot \_ -> a != withL g
-      Right b :-#> g -> WhyNot \p -> fun' p b != withR g
+      Left a :-#> g -> whyNot \_ -> a != withL g
+      Right b :-#> g -> whyNot \p -> fun' p b != withR g
     R -> \(Ur f) -> lol \case
       L -> \nawnb -> with \case
         L -> withL nawnb
@@ -283,25 +313,26 @@ instance Prop a => Functor (Either a) where
 instance Prop p => Functor ((&) p) where
   fmap' = lol \case
     L -> \nf -> apartR nf & \case
-      pwa :-#> Left np -> WhyNot \_ -> withL pwa != np
-      pwa :-#> Right nb -> WhyNot \a2b -> fun' a2b (withR pwa) != nb
+      pwa :-#> Left np -> whyNot \_ -> withL' pwa != np
+      pwa :-#> Right nb -> whyNot \a2b -> fun' a2b (withR' pwa) != nb
     R -> \(Ur f) -> lol \case
       L -> \case
         Left np -> Left np
         Right nb -> Right (contra' f nb)
       R -> \pwa -> with \case
-        L -> withL pwa
-        R -> fun f (withR pwa)
+        L -> withL' pwa
+        R -> fun' f (withR' pwa)
 
 instance Prop a => Functor ((⅋) a) where
   fmap' = lol \case
-    L -> \nf -> apartR nf & \(apc :-#> (na,nb)) ->
-      WhyNot \c2b -> parR apc na != contra' c2b nb
+    L -> \nf -> apartR nf & \case
+      apc :-#> (na,nb) ->
+        WhyNot \c2b -> parR' apc na != contra' c2b nb
     R -> \(Ur f) -> lol \case
       L -> \(na,nb) -> (na, contra' f nb)
       R -> \apa1 -> par \case
         L -> \nb -> parL' apa1 (contra' f nb)
-        R -> \na -> fun f (parR' apa1 na)
+        R -> \na -> fun' f (parR' apa1 na)
 
 class (Functor f, Functor g) => Adjunction f g | f -> g, g -> f where
   adj :: (Iso iso, Prop a, Prop b) => iso (f a ⊸ b) (a ⊸ g b)
@@ -314,7 +345,8 @@ instance Prop e => Adjunction ((,) e) ((⊸) e) where
 instance Prop b => Functor ((<#-) b) where
   fmap' = lol \case
     L -> \nk -> apartR nk & \case
-      (a :-#> nb) :-#> c2b -> WhyNot \a2c -> fun' c2b (fun' a2c a) != nb
+      (a :-#> nb) :-#> c2b ->
+        WhyNot \a2c -> fun' c2b (fun' a2c a) != nb
     R -> \(Ur a2c) -> lol \case
       L -> \c2b -> c2b . a2c
       R -> linear \(a :-#> nb) -> fun' a2c a :-#> nb
@@ -334,7 +366,6 @@ class
   dimap'
     :: (Prop a, Prop b, Prop c, Prop d, Lol l, Lol l', Lol l'')
     => l (Ur (a ⊸ b)) (l' (Ur (c ⊸ d)) (l'' (t b c) (t a d)))
-
 
 dimap
   :: (Profunctor t, Prop a, Prop b, Prop c, Prop d, Lol l)
@@ -388,20 +419,69 @@ instance Profunctor (<#-) where
           R -> \c -> fun' a2b (fun' d2a (fun' c2d c))
         R -> linear \(c :-#> nb) -> fun' c2d c :-#> contra' a2b nb
 
+instance Prop y => Functor (Noimp y) where
+  fmap' = lol \case
+    L -> \ni -> apartR ni & \case
+      Noimp a ny :-#> b2y -> 
+        WhyNot \a2b -> impR' b2y (fun' a2b a) != ny
+    R -> \(Ur a2b) -> lol \case
+      L -> \biy -> imp \case 
+        L -> \ny -> contra' (fmap a2b) (impL' biy ny)
+        R -> \a -> impR' biy (fun' a2b a)
+      R -> \(Noimp a ny) -> Noimp (fun' a2b a) ny
+
+instance Prop y => Functor (Nofun m y) where
+  fmap' = lol \case
+    L -> \ni -> apartR ni & \case
+      Nofun a ny :-#> b2y -> WhyNot \a2b -> b2y (fun' a2b a) != ny
+    R -> \(Ur (a2b :: a ⊸ b)) -> lol \case
+      L -> \(b2y :: b %m -> y) a -> b2y (fun' a2b a)
+      R -> linear \(Nofun a ny :: Nofun m y a) -> Nofun (fun' a2b a) ny
+
+instance Profunctor Noimp where
+  dimap' = lol \case
+    L -> \ni -> apartR ni & \case
+      Ur c2d :-#> nj -> apartR nj & \case
+        Noimp c nb :-#> d2a -> WhyNot \a2b -> fun' a2b (impR' d2a (fun' c2d c)) != nb
+    R -> \(Ur a2b) -> lol \case
+      L -> \nj -> apartR nj & \case
+        Noimp c nb :-#> d2a -> WhyNot \c2d -> fun' a2b (impR' d2a (fun' c2d c)) != nb
+      R -> \(Ur c2d) -> lol \case 
+        L -> linear \dia -> imp \case
+          L -> \nb -> WhyNot \c -> dia != Noimp (fun' c2d c) (contra' a2b nb)
+          R -> \c -> fun' a2b (impR' dia (fun' c2d c))
+        R -> linear \(Noimp c nb) -> Noimp (fun' c2d c) (contra' a2b nb)
+
+instance Profunctor (Nofun m) where
+  dimap' = lol \case
+    L -> \ni -> apartR ni & \case
+      Ur c2d :-#> nj -> apartR nj & \case
+        Nofun c nb :-#> d2a -> WhyNot \a2b -> fun' a2b (d2a (fun' c2d c)) != nb
+    R -> \(Ur (a2b :: a ⊸ b)) -> lol \case
+      L -> \ni -> apartR ni & \case
+        Nofun c nb :-#> d2a -> WhyNot \c2d -> fun' a2b (d2a (fun' c2d c)) != nb
+      R -> \(Ur (c2d :: c ⊸ d)) -> lol \case
+        L -> \d2a -> (\c -> fun' a2b (d2a (fun' c2d c))) :: c %m -> b
+        R -> linear \case
+         (Nofun c nb :: Nofun m b c) ->
+           Nofun (fun' c2d c) (contra' a2b nb) :: Nofun m a d
+
 instance Profunctor (FUN m) where
   dimap' = lol \case
     L -> \nf -> apartR nf & \case
-      Ur c2d :-#> nh -> apartR nh & \(b2c :-#> Nofun a nd) ->
-        contra' c2d nd & \nc -> WhyNot \a2b -> nc != b2c (fun' a2b a)
+      Ur c2d :-#> nh -> apartR nh & \case
+        b2c :-#> Nofun a nd -> contra' c2d nd & \nc -> 
+          WhyNot \a2b -> b2c (fun' a2b a) != nc
     R -> \(Ur (a2b :: a ⊸ b)) -> lol \case
       L -> \ng -> apartR ng & linear \(b2c :-#> Nofun a nd) ->
-        WhyNot \(c2d :: c ⊸ d) -> b2c != (Nofun (fun' a2b a) (contra' c2d nd) :: Nofun m b c)
+        WhyNot \(c2d :: c ⊸ d) -> 
+          b2c != (Nofun (fun' a2b a) (contra' c2d nd) :: Nofun m c b)
       R -> \(Ur (c2d :: c ⊸ d)) -> lol \case
         R -> go where
           go :: (b %m -> c) %1 -> a %m -> d
           go b2c a = fun' c2d (b2c (fun' a2b a))
         L -> go where
-          go :: Nofun m a d %1 -> Nofun m b c
+          go :: Nofun m d a %1 -> Nofun m c b
           go (Nofun a nd) = Nofun (fun' a2b a) (contra' c2d nd)
 
 instance Profunctor (⊃) where
@@ -1316,6 +1396,11 @@ contra' = lol \case
   L -> \nf -> apartR nf & \(p :-#> nq) -> nq :-#> p
   R -> contra''
 
+contra'ish :: forall l l' p q. (Lol l, Lol l', Prop p, Prop q) => l (p ⊸ q) (l' (Not q) (Not p))
+contra'ish = lol \case
+  L -> \nf -> apartR nf & \(p :-#> nq) -> nq :-#> p
+  R -> contra''
+
 contra :: forall iso p q. (Iso iso, Prep p, Prep q) => iso (p ⊸ q) (Not q ⊸ Not p)
 contra = iso \case
   L -> contra'
@@ -1337,17 +1422,6 @@ contraIso :: forall iso p q. (Iso iso, Prep p, Prep q) => iso (p ⧟ q) (Not q �
 contraIso = iso \case
   L -> contraIso'
   R -> contraIso'
-
-fun :: (Lol l, Lol l') => l (a ⊸ b) (l' a b)
-fun = lol \case
-  L -> apartR
-  R -> \(Lol f) -> lol f
-{-# inline fun #-}
-
-funIso :: (Lol l, Iso i) => l (a ⧟ b) (i a b)
-funIso = lol \case
-  L -> apart
-  R -> \(Iso f) -> iso f
 
 lolPar :: (Iso iso, Prep a) => (a ⊸ b) `iso` (Not a ⅋ b)
 lolPar = iso \case

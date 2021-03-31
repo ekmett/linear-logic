@@ -39,12 +39,11 @@ data Y a b c where
 
 #else
 
-import Data.Type.Equality
 import GHC.Prim
 import GHC.Types
 import Unsafe.Coerce
 
-type Y' :: i -> j -> k -> Type
+type Y' :: i -> i -> i -> Type
 type role Y' nominal nominal nominal
 data Y' a b c where
   L' :: Y' a b a
@@ -54,15 +53,15 @@ upY :: Y a b c %1 -> Y' a b c
 upY (Y 0#) = unsafeCoerce L'
 upY (Y 1#) = unsafeCoerce R'
 
-type Y :: i -> j -> k -> TYPE 'IntRep
+type Y :: i -> i -> i -> TYPE 'IntRep
 type role Y nominal nominal nominal
 newtype Y a b c = Y Int#
 
-pattern L :: forall i j k (a :: i) (b :: j) (c :: k). () => a ~~ c => Y a b c
+pattern L :: forall i (a :: i) (b :: i) (c :: i). () => a ~ c => Y a b c
 pattern L <- (upY -> L') where
   L = Y 0#
 
-pattern R :: forall i j k (a :: i) (b :: j) (c :: k). () => b ~~ c => Y a b c
+pattern R :: forall i (a :: i) (b :: i) (c :: i). () => b ~ c => Y a b c
 pattern R <- (upY -> R') where
   R = Y 1#
 

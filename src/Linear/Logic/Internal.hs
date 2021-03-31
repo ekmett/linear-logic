@@ -263,21 +263,21 @@ instance (Prep a, Prop b) => Prop (a ⅋ b) where
 -- The injective type family on @Not@ forces me to use a flexible
 -- instance, rather than have the instance self-improve
 instance Prop b => Prop (a %m -> b) where
-  type Not (a %m -> b) = Nofun m a b
+  type Not (a %m -> b) = Nofun m b a
   f != (Nofun a nb) = f a != nb
   {-# inline (!=) #-}
 
 -- | The refutations of a linear haskell arrow are the same as the refutation of ⊸.
-data Nofun m a b where
-  Nofun :: a %m -> Not b %1 -> Nofun m a b
+data Nofun m b a where
+  Nofun :: a %m -> Not b %1 -> Nofun m b a
 
-deriving stock instance (Show a, Show (Not b)) => Show (Nofun m a b)
-deriving stock instance (Read a, Read (Not b)) => Read (Nofun m a b)
+deriving stock instance (Show a, Show (Not b)) => Show (Nofun m b a)
+deriving stock instance (Read a, Read (Not b)) => Read (Nofun m b a)
 -- deriving stock instance (Eq a, Eq (Not b)) => Eq (Nofun m a b)
 -- deriving stock instance (Ord a, Ord (Not b)) => Ord (Nofun m a b)
 
-instance Prop b => Prop (Nofun m a b) where
-  type Not (Nofun m a b) = a %m -> b
+instance Prop b => Prop (Nofun m b a) where
+  type Not (Nofun m b a) = a %m -> b
   Nofun a nb != f = f a != nb
   {-# inline (!=) #-}
 
@@ -321,17 +321,17 @@ instance C.Category (⧟) where
     L -> runIso g L C.. runIso f L
     R -> runIso f R C.. runIso g R
 
-data a # b
+data b # a
   = ApartL (Not a) b
   | ApartR a (Not b)
 
 instance (Prop a, Prop b) => Prop (a ⧟ b) where
-  type Not (a ⧟ b) = a # b
+  type Not (a ⧟ b) = b # a
   Iso f != ApartR a nb = f R != (a :-#> nb)
   Iso f != ApartL na b = f L != (b :-#> na)
 
-instance (Prop a, Prop b) => Prop (a # b) where
-  type Not (a # b) = a ⧟ b
+instance (Prop a, Prop b) => Prop (b # a) where
+  type Not (b # a) = a ⧟ b
   ApartR a nb != Iso f = f R != (a :-#> nb)
   ApartL na b != Iso f = f L != (b :-#> na)
 
@@ -347,7 +347,6 @@ deriving stock instance (Show a, Show (Not b)) => Show (b <#- a)
 deriving stock instance (Read a, Read (Not b)) => Read (b <#- a)
 -- deriving stock instance (Eq a, Eq (Not b)) => Eq (a # b)
 -- deriving stock instance (Ord a, Ord (Not b)) => Ord (a # b)
-
 
 -- | The \(?a\) or "why not?" modality.
 type role WhyNot nominal
@@ -458,6 +457,7 @@ instance (IProp f, IProp g) => IProp (f :⅋: g) where
   icontradict (IPar h) (f :*: g) = icontradict (h R f) g
   inot = Refl
 
+-- | Ur a ⊸ b
 newtype a ⊃ b = Imp (forall c. (Prop a, Prop b) => Y (Not b %1 -> WhyNot (Not a)) (a -> b) c -> c)
 
 infixr 0 ⊃
@@ -474,15 +474,15 @@ impR' f = runImp f R
 impL' :: (Prop a, Prop b) => (a ⊃ b) %1 -> Not b %1 -> WhyNot (Not a)
 impL' f = runImp f L
 
-data Noimp a b where
-  Noimp :: a -> Not b %1 -> Noimp a b
+data Noimp b a where
+  Noimp :: a -> Not b %1 -> Noimp b a
 
 instance (Prop a, Prop b) => Prop (a ⊃ b) where
-  type Not (a ⊃ b) = Noimp a b
+  type Not (a ⊃ b) = Noimp b a
   f != Noimp a b = runImp f R a != b
 
-instance (Prop a, Prop b) => Prop (Noimp a b) where
-  type Not (Noimp a b) = a ⊃ b
+instance (Prop a, Prop b) => Prop (Noimp b a) where
+  type Not (Noimp b a) = a ⊃ b
   Noimp a b != f = runImp f R a != b
 
 -- FTensor would match hkd. DFoo would match dependent-sum, dependent-hashmap. change hkd?
