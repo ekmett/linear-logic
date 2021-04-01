@@ -342,6 +342,26 @@ instance Prop e => Adjunction ((,) e) ((⊸) e) where
     L -> uncurryTensor' . flip
     R -> flip . curryTensor'
 
+-- | The directed apartness as the left adjoint of (⅋) e. Found in 
+-- <https://www.math.mcgill.ca/rags/nets/fill.pdf>.
+instance Prop e => Adjunction ((<#-) e) ((⅋) e) where
+  adj = iso \case
+    L -> lol \case
+      L -> \case
+        (a :-#> ne) :-#> nb -> a :-#> (ne, nb)
+      R -> \a2epb -> lol \case
+        L -> \nb -> lol \case
+          L -> \ne -> contra' a2epb (ne, nb)
+          R -> \a -> parL' (fun' a2epb a) nb
+        R -> \(a :-#> ne) -> parR' (fun' a2epb a) ne
+    R -> lol \case
+      L -> \(a :-#> (ne, nb)) -> (a :-#> ne) :-#> nb
+      R -> \k -> lol \case
+        L -> \(ne, nb) -> contra' (contra' k nb) ne
+        R -> \a -> par \case
+          L -> linear \nb -> fun' (contra' k nb) a
+          R -> \ne -> fun' k (a :-#> ne)
+
 instance Prop b => Functor ((<#-) b) where
   fmap' = lol \case
     L -> \nk -> apartR nk & \case
@@ -693,9 +713,43 @@ instance Symmetric (#) where
 instance Symmetric (⧟) where
   swap = inv
 
-class (Functor f, Bifunctor p) => Dist f p where
+class (Functor f, Bifunctor p) => WeakDist f p where
+  weakDist :: (Lol l, Prop b, Prop c) => l (f (p b c)) (p (f b) (f c))
+  default weakDist :: (Lol l, Prop b, Prop c, Dist f p) => l (f (p b c)) (p (f b) (f c))
+  weakDist = weakDist
+
+class WeakDist f p => Dist f p where
   dist :: (Iso iso, Prop b, Prop c) => iso (f (p b c)) (p (f b) (f c))
 
+instance Prop a => WeakDist ((,) a) (&) where
+  weakDist = lol \case
+    L -> \case
+      Left x -> fmap left x
+      Right x -> fmap right x
+    R -> \case
+      (a, bwc) -> with \case
+        L -> (a, withL bwc)
+        R -> (a, withR bwc)
+
+-- | Hyland and de Paiva section 3.2 as @w@
+interchangeTensorPar :: (Lol l, Prop a, Prop b, Prop c) => l (a * (b ⅋ c)) ((a * b) ⅋ c)
+interchangeTensorPar = lol \case
+  L -> \(napnb, nc) -> par \case
+    L -> \bpc -> parL' napnb (parL bpc nc)
+    R -> \a -> (parR' napnb a, nc)
+  R -> \(a, bpc) -> par \case
+    L -> \nc -> (a, parL' bpc nc)
+    R -> \napnb -> parR' bpc (parR' napnb a)
+
+-- | Hyland and dePaiva's paper on FILL in section 4 describes this map as problematic
+unrestricted :: (Prop a, Prop b) => (a ⅋ b ⊸ a) ⅋ b
+unrestricted = par \case
+  L -> \nb -> lol \case
+    L -> \na -> (na, nb)
+    R -> \apb -> parL' apb nb
+  R -> \(apb :-#> na) -> parR' apb na
+
+instance Prop a => WeakDist ((,) a) Either
 instance Prop a => Dist ((,) a) Either where
   dist = iso \case
     L -> lol \case
@@ -721,6 +775,7 @@ instance Prop a => Dist ((,) a) Either where
         (a, Left b) ->  Left (a, b)
         (a, Right c) -> Right (a, c)
 
+instance Prop a => WeakDist ((⅋) a) (&)
 instance Prop a => Dist ((⅋) a) (&) where
   dist = iso \case
     L -> lol \case
@@ -1432,6 +1487,20 @@ lolPar = iso \case
     L -> \(a, nb) -> a :-#> nb
     R -> \(Lol f) -> Par f
 
+
 --class Monoidal p => EnrichedCategory p t where
 --  eid :: (Lol l, Prop a) => proxy p -> I p `l` t a a
 --  ecomp :: (Lol l, Prop a) => p (t b c) (t a b) `l` t a c
+
+-- LNL ?
+--
+-- F :: Hask -> L
+-- G :: L -> Hask are both symmetric monoidal.
+--
+-- F -| G   GF is a monad, FG is a comonad
+--
+-- F a %1 -> b     ~    a -> G b
+--
+-- Ur = FG 
+--
+-- Moggi is a monad on Hask, which internally carries linear values? 
