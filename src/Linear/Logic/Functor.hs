@@ -180,7 +180,7 @@ class
   ) => Functor f where
   fmap' :: (Prop a, Prop b, Lol l, Lol l') => l (Ur (a ⊸ b)) (l' (f a) (f b))
 
-fmap :: (Functor f, Prop a, Prop b, Lol l) => (a ⊸ b) -> l (f a) (f b)
+fmap :: forall f a b l. (Functor f, Prop a, Prop b, Lol l) => (a ⊸ b) -> l (f a) (f b)
 fmap  f = fmap' (Ur f)
 
 fmapIso' :: (Functor f, Prop a, Prop b, Lol l, Iso i) => l (Ur (a ⧟ b)) (i (f a) (f b))

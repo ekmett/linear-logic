@@ -68,6 +68,7 @@ library
     Linear.Logic.Orphans
     Linear.Logic.Unsafe
     Linear.Logic.Y
+    Linear.Logic.Yoneda
   ghc-options:
     -Wall -fexpose-all-unfoldings -fspecialize-aggressively
     -fno-show-valid-hole-fits
