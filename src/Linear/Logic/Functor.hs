@@ -38,16 +38,16 @@
 module Linear.Logic.Functor where
 
 import Data.Type.Equality
-import Data.Void
+import Data.Void (Void)
 import Data.Kind
 import GHC.Types
 import Linear.Logic.Internal
 import Linear.Logic.Y
-import Prelude.Linear hiding (id,(.),flip)
+import Prelude.Linear hiding (id,(.),flip,Semigroup(..), Monoid(..))
 
 type family NotApart (p :: Type -> Type -> Type) :: Type -> Type -> Type
 
-class 
+class
   ( forall a b. (Prop a, Prop b) => Prop (p a b)
   , NotApart (NotIso p) ~ p
   ) => Iso p where
@@ -71,7 +71,7 @@ instance Iso (⧟) where
 
 type instance NotApart (<#-) = (⊸)
 instance Iso (⊸) where
-  type NotIso (⊸) = (<#-) 
+  type NotIso (⊸) = (<#-)
   iso f = f R
   apart (a :-#> nb) = ApartR a nb
   notIso = Refl
@@ -342,7 +342,7 @@ instance Prop e => Adjunction ((,) e) ((⊸) e) where
     L -> uncurryTensor' . flip
     R -> flip . curryTensor'
 
--- | The directed apartness as the left adjoint of (⅋) e. Found in 
+-- | The directed apartness as the left adjoint of (⅋) e. Found in
 -- <https://www.math.mcgill.ca/rags/nets/fill.pdf>.
 instance Prop e => Adjunction ((<#-) e) ((⅋) e) where
   adj = iso \case
@@ -427,11 +427,11 @@ instance Profunctor (⊸) where
 
 instance Profunctor (<#-) where
   dimap' = lol \case
-    L -> \ni -> apartR ni & \((Ur c2d) :-#> nj) -> 
-      apartR nj & \((c :-#> nb) :-#> d2a) -> 
+    L -> \ni -> apartR ni & \((Ur c2d) :-#> nj) ->
+      apartR nj & \((c :-#> nb) :-#> d2a) ->
         WhyNot \a2b -> fun' a2b (fun' d2a (fun' c2d c)) != nb
     R -> \(Ur a2b) -> lol \case
-      L -> \ni -> apartR ni & \((c :-#> nb) :-#> d2a) -> 
+      L -> \ni -> apartR ni & \((c :-#> nb) :-#> d2a) ->
         WhyNot \c2d -> fun' a2b (fun' d2a (fun' c2d c)) != nb
       R -> \(Ur c2d) -> lol \case
         L -> \d2a -> lol \case
@@ -442,10 +442,10 @@ instance Profunctor (<#-) where
 instance Prop y => Functor (Noimp y) where
   fmap' = lol \case
     L -> \ni -> apartR ni & \case
-      Noimp a ny :-#> b2y -> 
+      Noimp a ny :-#> b2y ->
         WhyNot \a2b -> impR' b2y (fun' a2b a) != ny
     R -> \(Ur a2b) -> lol \case
-      L -> \biy -> imp \case 
+      L -> \biy -> imp \case
         L -> \ny -> contra' (fmap a2b) (impL' biy ny)
         R -> \a -> impR' biy (fun' a2b a)
       R -> \(Noimp a ny) -> Noimp (fun' a2b a) ny
@@ -466,7 +466,7 @@ instance Profunctor Noimp where
     R -> \(Ur a2b) -> lol \case
       L -> \nj -> apartR nj & \case
         Noimp c nb :-#> d2a -> WhyNot \c2d -> fun' a2b (impR' d2a (fun' c2d c)) != nb
-      R -> \(Ur c2d) -> lol \case 
+      R -> \(Ur c2d) -> lol \case
         L -> linear \dia -> imp \case
           L -> \nb -> WhyNot \c -> dia != Noimp (fun' c2d c) (contra' a2b nb)
           R -> \c -> fun' a2b (impR' dia (fun' c2d c))
@@ -490,11 +490,11 @@ instance Profunctor (FUN m) where
   dimap' = lol \case
     L -> \nf -> apartR nf & \case
       Ur c2d :-#> nh -> apartR nh & \case
-        b2c :-#> Nofun a nd -> contra' c2d nd & \nc -> 
+        b2c :-#> Nofun a nd -> contra' c2d nd & \nc ->
           WhyNot \a2b -> b2c (fun' a2b a) != nc
     R -> \(Ur (a2b :: a ⊸ b)) -> lol \case
       L -> \ng -> apartR ng & linear \(b2c :-#> Nofun a nd) ->
-        WhyNot \(c2d :: c ⊸ d) -> 
+        WhyNot \(c2d :: c ⊸ d) ->
           b2c != (Nofun (fun' a2b a) (contra' c2d nd) :: Nofun m c b)
       R -> \(Ur (c2d :: c ⊸ d)) -> lol \case
         R -> go where
@@ -1310,7 +1310,7 @@ contraunseelyTop'' :: WhyNot Void %1 -> Bot
 contraunseelyTop'' = \n -> because n (Top ())
 
 contraseelyTop'' :: Bot %1 -> WhyNot Void
-contraseelyTop'' = \(Bot f) -> WhyNot \top -> f top
+contraseelyTop'' = \(Bot f) -> WhyNot \t -> f t
 
 unseelyTop'' :: () %1 -> Ur Top
 unseelyTop'' = \() -> Ur (Top ())
@@ -1487,20 +1487,98 @@ lolPar = iso \case
     L -> \(a, nb) -> a :-#> nb
     R -> \(Lol f) -> Par f
 
+class Prop a => Semigroup a where
+  (<>) :: (Lol l, Lol l') => l a (l' a a)
 
---class Monoidal p => EnrichedCategory p t where
---  eid :: (Lol l, Prop a) => proxy p -> I p `l` t a a
---  ecomp :: (Lol l, Prop a) => p (t b c) (t a b) `l` t a c
+class Semigroup a => Monoid a where
+  mempty :: a
+
+instance Semigroup () where
+  (<>) = lol \case
+    L -> \ni -> apartR ni & \case a :-#> na -> a != na
+    R -> \() -> fun id
+
+top :: Lol l => l a Top
+top = lol \case R -> Top; L -> \case
+
+absurd :: Lol l => l Void a
+absurd = lol \case
+  L -> Top
+  R -> \case
+
+instance Semigroup Top where
+  (<>) = curryTensor' top
+
+instance Monoid () where
+  mempty = ()
+
+instance Monoid Top where
+  mempty = top ()
+
+instance Semigroup Void where
+  (<>) = absurd
+
+mksemi :: (Lol l, Lol l', Prop a) => (a %1 -> a ⊸ a) %1 -> l a (l' a a)
+mksemi f = lol \case
+  L -> \ni -> apartR ni & \(p :-#> np) -> (p != np) f
+  R -> \x -> fun (f x)
+
+instance Semigroup Bot where
+  (<>) = mksemi \(Bot k) -> lol \case
+    L -> \u -> k (Top u)
+    R -> \b -> k (Top b)
+
+instance (Semigroup a, Semigroup b) => Semigroup (a, b) where
+  (<>) = mksemi \(a,b) -> lol \case
+    L -> \napnb -> parR napnb a != b
+    R -> \(c,d) -> (a <> c, b <>d)
+
+instance (Semigroup a, Semigroup b) => Semigroup (a & b) where
+  (<>) = mksemi \awb -> lol \case
+    L -> \case
+      Left na  -> withL' awb != na
+      Right nb -> withR' awb != nb
+    R -> \cwd -> with \case
+      L -> withL' awb <> withL' cwd
+      R -> withR' awb <> withR' cwd
+
+instance (Monoid a, Monoid b) => Monoid (a, b) where
+  mempty = (mempty, mempty)
+
+instance (Monoid a, Monoid b) => Monoid (a & b) where
+  mempty = with \case
+    L -> mempty
+    R -> mempty
+
+-- strong closed functors
+class Functor f => Applicative f where
+  pure :: (Prop a, Lol l) => l a (f a)
+  (<*>)
+    :: (Prop a, Prop b, Lol l, Lol l')
+    => l (f (a ⊸ b)) (l' (f a) (f b))
+
+  liftA2
+    :: (Prop a, Prop b, Prop c, Lol l, Lol l', Lol l'')
+    => l (a ⊸ b ⊸ c) (l' (f a) (l'' (f b) (f c)))
+  (<*>) = liftA2 id
 
 -- LNL ?
 --
 -- F :: Hask -> L
--- G :: L -> Hask are both symmetric monoidal.
+-- U :: L -> Hask are both symmetric monoidal.
 --
--- F -| G   GF is a monad, FG is a comonad
+-- F -| U   UF is a monad, FU is a comonad
 --
--- F a %1 -> b     ~    a -> G b
+-- F a %1 -> b ~ a -> U b
 --
--- Ur = FG 
+-- data F a where
+--   F :: a -> F a
 --
--- Moggi is a monad on Hask, which internally carries linear values? 
+-- data U b where
+--   U :: b %1 -> U b
+--
+-- Ur = FU
+--
+-- !
+--
+-- Moggi is a monad on Hask, which internally carries linear values?

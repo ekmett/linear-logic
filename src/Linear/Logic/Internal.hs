@@ -151,6 +151,9 @@ with :: (forall c. Y a b c -> c) %1 -> a & b
 with = With
 {-# inline with #-}
 
+runWith :: a & b %1 -> Y a b c -> c
+runWith (With f) = f
+
 -- | Eliminate a @'With'/('&')@ connective and extract the left choice.
 --
 -- @
@@ -458,7 +461,8 @@ instance (IProp f, IProp g) => IProp (f :⅋: g) where
   inot = Refl
 
 -- | Ur a ⊸ b
-newtype a ⊃ b = Imp (forall c. (Prop a, Prop b) => Y (Not b %1 -> WhyNot (Not a)) (a -> b) c -> c)
+newtype a ⊃ b = Imp
+  (forall c. (Prop a, Prop b) => Y (Not b %1 -> WhyNot (Not a)) (a -> b) c -> c)
 
 infixr 0 ⊃
 
@@ -491,6 +495,6 @@ instance (Prop a, Prop b) => Prop (Noimp b a) where
 -- that can be swizzled into 'g's and 'h's?
 -- newtype DTensor :: [i] -> (i -> Type) -> Type
 -- newtype DPar :: [i] -> (i -> Type) -> Type
---  ⊸ ⅋ 
+--  ⊸ ⅋
 --newtype a ⇀ b = Partial (a ⊸ WhyNot b)
 -- a ⇀ b = Not a ⅋ WhyNot b = WhyNot b ⅋ Not a = Not (WhyNot b) ⊸ Not a = Ur b ⊸ Not a = b ⊃ Not a
