@@ -63,6 +63,7 @@ library
     linear-base
   exposed-modules:
     Linear.Logic
+    Linear.Logic.Day
     Linear.Logic.Functor
     Linear.Logic.Internal
     Linear.Logic.Orphans
