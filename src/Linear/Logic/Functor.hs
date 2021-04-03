@@ -47,7 +47,7 @@ import Prelude.Linear hiding (id,(.),flip,Semigroup(..), Monoid(..))
 type family NotApart (p :: Type -> Type -> Type) :: Type -> Type -> Type
 
 class
-  ( forall a b. (Prop a, Prop b) => Prop (p a b)
+  ( forall a b. (Prop' a, Prop' b) => Prop' (p a b)
   , NotApart (NotIso p) ~ p
   ) => Iso p where
   type NotIso p = (q :: Type -> Type -> Type) | q -> p
@@ -132,8 +132,8 @@ funIso = lol \case
   R -> \(Iso f) -> iso f
 
 class Category p where
-  id :: Prop a => p a a
-  (.) :: (Prop a, Prop b, Prop c) => p b c %1 -> p a b %1 -> p a c
+  id :: Prop' a => p a a
+  (.) :: (Prop' a, Prop' b, Prop' c) => p b c %1 -> p a b %1 -> p a c
 
 instance Category (FUN 'One) where
   id x = x
@@ -141,11 +141,11 @@ instance Category (FUN 'One) where
 
 -- | Here we have the ability to provide more refutations, because we can walk
 -- all the way back to my arrows. This is internal to my logic.
-class (forall a b. (Prop a, Prop b) => Prop (p a b)) => NiceCategory p where
+class (forall a b. (Prop' a, Prop' b) => Prop' (p a b)) => NiceCategory p where
   o :: (Lol l, Lol l', Prop a, Prop b, Prop c) => l (p b c) (l' (p a b) (p a c))
 
 instance Category (⊸) where
-  id = Lol \case L -> id; R -> id
+  id = Lol \case L -> \x -> x; R -> \x -> x
   f . g = Lol \case
     L -> \c -> runLol g L (runLol f L c)
     R -> \a -> runLol f R (runLol g R a)
@@ -174,7 +174,7 @@ instance NiceCategory (⧟) where
         ApartR a nc -> ApartR a (runLol (runIso bc R) L nc)
       R -> (bc .)
 
-liftUr :: (Prep a, Prop b, Lol l, Lol l') => l (Ur (a ⊸ b)) (l' (Ur a) b)
+liftUr :: (Prep a, Prop' b, Lol l, Lol l') => l (Ur (a ⊸ b)) (l' (Ur a) b)
 liftUr = lol \case
   R -> \(Ur a2b) -> lol \case
     R -> \(Ur a) -> fun' a2b a
@@ -182,14 +182,14 @@ liftUr = lol \case
   L -> \nf -> apartR nf & \(Ur a :-#> nb) -> whyNot \a2b -> fun' a2b a != nb
 
 class
-  ( forall a. Prop a => Prop (f a)
+  ( forall a. Prop' a => Prop' (f a)
   ) => Functor f where
-  fmap' :: (Prop a, Prop b, Lol l, Lol l') => l (Ur (a ⊸ b)) (l' (f a) (f b))
+  fmap' :: (Prop' a, Prop' b, Lol l, Lol l') => l (Ur (a ⊸ b)) (l' (f a) (f b))
 
-fmap :: forall f a b l. (Functor f, Prop a, Prop b, Lol l) => (a ⊸ b) -> l (f a) (f b)
+fmap :: forall f a b l. (Functor f, Prop' a, Prop' b, Lol l) => (a ⊸ b) -> l (f a) (f b)
 fmap  f = fmap' (Ur f)
 
-fmapIso' :: (Functor f, Prop a, Prop b, Lol l, Iso i) => l (Ur (a ⧟ b)) (i (f a) (f b))
+fmapIso' :: (Functor f, Prop' a, Prop' b, Lol l, Iso i) => l (Ur (a ⧟ b)) (i (f a) (f b))
 fmapIso' = lol \case
   L -> \ni -> apart ni & \case
     ApartL nfa fb -> whyNot \a2b -> fmap (inv' a2b) fb != nfa
@@ -198,7 +198,7 @@ fmapIso' = lol \case
     L -> fmap (inv' a2b)
     R -> fmap (funIso a2b)
 
-fmapIso :: (Functor f, Prop a, Prop b, Iso i) => (a ⧟ b) -> i (f a) (f b)
+fmapIso :: (Functor f, Prop' a, Prop' b, Iso i) => (a ⧟ b) -> i (f a) (f b)
 fmapIso f = fmapIso' (Ur f)
 
 instance Functor (FUN m a) where
@@ -268,7 +268,7 @@ instance Prop x => MFunctor ((⅋) x) where
   mfmap = lol \case
     L -> \nf -> apartR nf & \(xpa :-#> (nx, nb)) ->
       parR xpa nx :-#> nb
-    R -> contra' . mfmapTensor' . contra'
+    R -> \x -> contra' (mfmapTensor' (contra' x))
 
 -- lolPar :: (Iso iso, Prep a) => (a ⊸ b) `iso` (Not a ⅋ b)
 
@@ -378,7 +378,7 @@ instance Prop b => Functor ((<#-) b) where
       R -> linear \(a :-#> nb) -> fun' a2c a :-#> nb
 
 class
-  ( forall a. Prop a => Prop (f a)
+  ( forall a. Prop' a => Prop' (f a)
   ) => Contravariant f where
   contramap' :: (Prop a, Prop b, Lol l, Lol l') => l (Ur (a ⊸ b)) (l' (f b) (f a))
 

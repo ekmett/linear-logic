@@ -29,8 +29,7 @@
 -- To use the alias for @('*')@, make sure to enable @{-# LANGUAGE NoStarIsType #-}@
 
 module Linear.Logic
-( Prep
-, Prop(Not,(!=))
+( Prep, Prop'(Not,(!=)), Prop
 -- additive conjunction, with
 , type (&)(..), Top(..), type With, with, withL', withR', withL, withR
 -- additive disjunction, oplus
@@ -76,7 +75,7 @@ module Linear.Logic
 , DWith(..), runDWith, dwith
 , DSum(..)
 -- * indexed propositions
-, IProp(..)
+, IProp'(..), IProp
 , type (:&:)(..)
 , type (:*:)(..)
 , type (:⅋:)(..)
