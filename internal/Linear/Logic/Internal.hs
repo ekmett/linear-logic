@@ -119,7 +119,7 @@ instance Prop Bot where
 --
 -- An unlifted version of this is suplied by Linear.Logic.Y
 type role Y nominal nominal nominal
-type Y :: i -> j -> k -> Type
+type Y :: i -> i -> i -> Type
 data Y a b c where
   L :: Y a b a
   R :: Y a b b
@@ -291,6 +291,7 @@ type (%->) = FUN 'One
 -- | \(\multimap\) could be defined in terms of \(⅋\), but then I couldn't hang instances off it.
 --
 -- type p ⊸ q = Not p ⅋ q
+
 newtype a ⊸ b = Lol (forall c. Y (Not b %1 -> Not a) (a %1 -> b) c -> c)
 
 data b <#- a where (:-#>) :: a %1 -> Not b %1 -> b <#- a

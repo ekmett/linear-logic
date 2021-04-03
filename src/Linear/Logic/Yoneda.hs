@@ -13,7 +13,7 @@
 {-# language TypeApplications #-}
 {-# options_ghc -Wno-unused-imports #-}
 
-module Linear.Logic.Yoneda 
+module Linear.Logic.Yoneda
 ( Yoneda(..)
 , Noneda(..)
 , liftYoneda
@@ -62,11 +62,11 @@ liftYoneda = iso \case
     R -> \fa -> Yoneda do
       lol \case
         R -> \f -> fmap' f fa
-        L -> \nfr -> WhyNot \a2r -> fmap a2r fa != nfr
+        L -> \nfr -> whyNot \a2r -> fmap a2r fa != nfr
 
 lowerYoneda :: forall f a i. (Functor f, Prop a, Iso i) => i (Yoneda f a) (f a)
 lowerYoneda = inv' liftYoneda
- 
+
 data Coyoneda f a where
   Coyoneda :: Prop r => (r ⊸ a) -> f r %1 -> Coyoneda f a
 
@@ -78,7 +78,7 @@ runCononeda (Cononeda f) = fun f
 instance (Functor f, Prop a) => Prop (Coyoneda f a) where
   type Not (Coyoneda f a) = Cononeda f a
   Coyoneda r2a fr != k = because (runCononeda k fr) r2a
-  
+
 instance (Functor f, Prop a) => Prop (Cononeda f a) where
   type Not (Cononeda f a) = Coyoneda f a
   k != Coyoneda r2a fr = because (runCononeda k fr) r2a
@@ -97,7 +97,7 @@ liftCoyoneda = iso \case
   L -> lol \case
     L -> \nfa -> cononeda do
       lol \case
-        L -> \(Ur (r2a :: r ⊸ a)) -> runLol (fmap r2a) L nfa 
+        L -> \(Ur r2a) -> runLol (fmap r2a) L nfa
         R -> \fr -> whyNot \r2a -> fmap r2a fr != nfa
     R -> \(Coyoneda r2a fa) -> fmap r2a fa
   R -> liftCoyoneda'

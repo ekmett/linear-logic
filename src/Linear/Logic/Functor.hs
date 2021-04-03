@@ -30,8 +30,7 @@
 {-# language UndecidableSuperClasses #-}
 {-# language ImportQualifiedPost #-}
 {-# language Trustworthy #-}
-
-
+-- {-# options_ghc -fplugin Linear.Logic.Plugin #-} -- TODO use this to kill Prep constraints
 
 -- {-# options_ghc -Wno-unused-imports #-}
 
@@ -175,6 +174,13 @@ instance NiceCategory (⧟) where
         ApartR a nc -> ApartR a (runLol (runIso bc R) L nc)
       R -> (bc .)
 
+liftUr :: (Prep a, Prop b, Lol l, Lol l') => l (Ur (a ⊸ b)) (l' (Ur a) b)
+liftUr = lol \case
+  R -> \(Ur a2b) -> lol \case
+    R -> \(Ur a) -> fun' a2b a
+    L -> \nb -> whyNot \a -> fun' a2b a != nb
+  L -> \nf -> apartR nf & \(Ur a :-#> nb) -> whyNot \a2b -> fun' a2b a != nb
+
 class
   ( forall a. Prop a => Prop (f a)
   ) => Functor f where
@@ -273,11 +279,11 @@ instance Prop x => MFunctor ((⊸) x) where
       L -> \(x :-#> nb) -> x :-#> contra' a2b nb
       R -> (a2b .)
 
-instance MFunctor (FUN 'One x) where
+instance Prop x => MFunctor (FUN m x) where
   mfmap = lol \case
-    L -> \nf -> apartR nf & \(x2a :-#> Nofun x nb) -> x2a x :-#> nb
+    L -> \nf -> apartR nf & linear \(x2a :-#> Nofun x nb) -> linear (:-#>) (x2a x) nb
     R -> \(a2b :: a ⊸ b) -> lol \case
-      L -> linear \(Nofun x nb) -> Nofun x (contra' a2b nb)
+      L -> linear \(Nofun x nb :: Nofun m b x) -> Nofun x (runLol a2b L nb) :: Nofun m a x
       R -> \x2a x -> fun' a2b (x2a x)
 
 instance Functor Ur where
@@ -631,6 +637,8 @@ instance Bifunctor (⅋) where
         R -> \apc -> par \case
           L -> \nd -> fun' f (parL' apc (contra' g nd))
           R -> \nb -> fun' g (parR' apc (contra' f nb))
+
+-- TODO MBifunctor
 
 class Bifunctor t => Semimonoidal t where
   assoc :: (Prop a, Prop b, Prop c, Iso iso) => t (t a b) c `iso` t a (t b c)
