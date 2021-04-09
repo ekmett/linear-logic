@@ -17,6 +17,31 @@ on:
   - push
   - pull_request
 jobs:
+  irc:
+    name: Haskell-CI (IRC notification)
+    runs-on: ubuntu-18.04
+    needs:
+      - linux
+    if: ${{ always() && (github.repository == 'ekmett/linear-logic') }}
+    strategy:
+      fail-fast: false
+    steps:
+      - name: IRC success notification (irc.freenode.org#haskell-lens)
+        uses: Gottox/irc-message-action@v1.1
+        if: needs.linux.result == 'success'
+        with:
+          channel: "#haskell-lens"
+          message: "\x0313linear-logic\x03/\x0306${{ github.ref }}\x03 \x0314${{ github.sha }}\x03 https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }} The build succeeded."
+          nickname: github-actions
+          server: irc.freenode.org
+      - name: IRC failure notification (irc.freenode.org#haskell-lens)
+        uses: Gottox/irc-message-action@v1.1
+        if: needs.linux.result != 'success'
+        with:
+          channel: "#haskell-lens"
+          message: "\x0313linear-logic\x03/\x0306${{ github.ref }}\x03 \x0314${{ github.sha }}\x03 https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }} The build failed."
+          nickname: github-actions
+          server: irc.freenode.org
   linux:
     name: Haskell-CI - Linux - ${{ matrix.compiler }}
     runs-on: ubuntu-18.04
@@ -146,9 +171,6 @@ jobs:
         run: |
           $CABAL v2-build $ARG_COMPILER --disable-tests --disable-benchmarks --dependencies-only -j2 all
           $CABAL v2-build $ARG_COMPILER $ARG_TESTS $ARG_BENCH --dependencies-only -j2 all
-      - name: build w/o tests
-        run: |
-          $CABAL v2-build $ARG_COMPILER --disable-tests --disable-benchmarks all
       - name: build
         run: |
           $CABAL v2-build $ARG_COMPILER $ARG_TESTS $ARG_BENCH all --write-ghc-environment-files=always
@@ -159,7 +181,3 @@ jobs:
       - name: haddock
         run: |
           $CABAL v2-haddock $ARG_COMPILER --with-haddock $HADDOCK $ARG_TESTS $ARG_BENCH all
-      - name: unconstrained build
-        run: |
-          rm -f cabal.project.local
-          $CABAL v2-build $ARG_COMPILER --disable-tests --disable-benchmarks all
