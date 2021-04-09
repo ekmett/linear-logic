@@ -43,6 +43,7 @@ description:
     .
     Negative polarity connectives are 'GHC.Types.RuntimeRep' polymorphic,
     but only currently have 'Prop' instances defined for ''LiftedRep'
+tested-with: ghc == 9.0.1
 
 extra-source-files:
   CHANGELOG.md
