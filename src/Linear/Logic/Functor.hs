@@ -30,7 +30,7 @@
 {-# language UndecidableSuperClasses #-}
 {-# language ImportQualifiedPost #-}
 {-# language Trustworthy #-}
--- {-# options_ghc -fplugin Linear.Logic.Plugin #-} -- TODO use this to kill Prep constraints
+{-# options_ghc -fplugin Linear.Logic.Plugin #-} -- TODO use this to kill Prep constraints
 
 -- {-# options_ghc -Wno-unused-imports #-}
 
@@ -174,7 +174,8 @@ instance NiceCategory (⧟) where
         ApartR a nc -> ApartR a (runLol (runIso bc R) L nc)
       R -> (bc .)
 
-liftUr :: (Prep a, Prop' b, Lol l, Lol l') => l (Ur (a ⊸ b)) (l' (Ur a) b)
+liftUr :: forall a b l l'. (Prop' b, Lol l, Lol l') => l (Ur (a ⊸ b)) (l' (Ur a) b)
+-- liftUr :: (Prep a, Prop' b, Lol l, Lol l') => l (Ur (a ⊸ b)) (l' (Ur a) b)
 liftUr = lol \case
   R -> \(Ur a2b) -> lol \case
     R -> \(Ur a) -> fun' a2b a
@@ -1178,7 +1179,7 @@ swapApart = iso \case L -> swapApart'; R -> swapApart'
 --------------------------------------------------------------------------------
 
 curryTensor'
-  :: (Lol l, Lol l', Lol l'', Prep a, Prep b, Prep c)
+  :: (Lol l, Lol l', Lol l'') -- , Prep a, Prep b, Prep c)
   => l ((a * b) ⊸ c) (l' a (l'' b c))
 curryTensor' = lol \case
   L -> \nf -> apartR nf &
@@ -1192,7 +1193,7 @@ curryTensor' = lol \case
       R -> \b -> fun f (a, b)
 
 uncurryTensor'
-  :: (Lol l, Lol l', Prep a, Prep b, Prep c)
+  :: (Lol l, Lol l') -- , Prep a, Prep b, Prep c)
   => l (a ⊸ b ⊸ c) (l' (a * b) c)
 uncurryTensor' = lol \case
   L -> \nf -> apartR nf &
