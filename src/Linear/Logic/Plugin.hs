@@ -2,12 +2,13 @@
 {-# language LambdaCase #-}
 {-# language Trustworthy #-}
 {-# language RecordWildCards #-}
+{-# options_ghc -Wno-unused-matches #-}
 
 module Linear.Logic.Plugin where
 
-import Control.Monad
+-- import Control.Monad
 import Control.Monad.IO.Class
-import Data.Foldable (traverse_)
+-- import Data.Foldable (traverse_)
 import GHC.Builtin.Names
 import GHC.Builtin.Types
 import GHC.Builtin.Types.Prim
@@ -15,7 +16,7 @@ import GHC.Builtin.Types.Prim
 -- import GHC.Core.Coercion
 import GHC.Core.Predicate
 import GHC.Core.Type
-import GHC.Core.TyCo.Rep
+-- import GHC.Core.TyCo.Rep
 import GHC.Driver.Plugins (Plugin(..), defaultPlugin, purePlugin)
 -- import GHC.Driver.Session
 import GHC.Types.Name.Occurrence
@@ -24,7 +25,7 @@ import GHC.Tc.Types
 import GHC.Tc.Types.Constraint
 import GHC.Tc.Types.Evidence
 import GHC.TcPluginM.Extra (tracePlugin, evByFiat)
-import GHC.Types.Var
+-- import GHC.Types.Var
 import GHC.Unit.Module.Name
 -- import GHC.Unit.Types
 import GHC.Utils.Outputable
@@ -63,6 +64,7 @@ solveLogic () givens _deriveds wanteds = do
   let notKey = getUnique notTyCon
 
 
+{-
   unless (null wanteds) $ io do
     putStrLn "solveLogic\n"
     putStrLn "  wanteds:"
@@ -70,9 +72,11 @@ solveLogic () givens _deriveds wanteds = do
     putStrLn "  givens:"
     traverse_ (\x -> putStrLn $ "    " ++ pp (ctLocSpan (ctLoc x)) ++ " " ++ pp x) givens
     putStrLn "\n\n"
+-}
 
   let
 
+{-
     is :: Type -> Type -> Bool
     is (TyVarTy x) (TyVarTy x') = varUnique x == varUnique x'
    -- is _ _ = False
@@ -86,8 +90,10 @@ solveLogic () givens _deriveds wanteds = do
 
     findNot :: Type -> Type -> [Ct] -> Bool
     findNot y x = any (isNot y x) 
+-}
 
     runEvExpr (EvExpr x) = x
+    runEvExpr _ = error "runEvExpr"
 
     tryToSolve :: Ct -> TcPluginM ([(EvTerm,Ct)],[Ct])
     tryToSolve ct = case classifyPredType $ ctEvPred $ ctEvidence ct of
@@ -128,7 +134,7 @@ solveLogic () givens _deriveds wanteds = do
           io $ putStrLn $ "not-notish: " ++ pp nnx ++ " ~# " ++ pp x
           pure ([],[mkNonCanonical givenEvidence])
       EqPred n x y -> do
-        io $ putStrLn $ "I think " ++ pp n ++ " " ++ pp x ++ pp y ++ " is none of my business"
+       -- io $ putStrLn $ "I think " ++ pp n ++ " " ++ pp x ++ pp y ++ " is none of my business"
         pure ([],[])
       ClassPred c [_star, nnx, y]
         | hasKey c eqTyConKey 
@@ -141,15 +147,14 @@ solveLogic () givens _deriveds wanteds = do
 
         pure ([(evDataConApp eqDataCon [liftedTypeKind,x,y] [runEvExpr $ evByFiat "not-not" x y], ct)],[mkNonCanonical wantedEvidence])
       ClassPred c tys -> do
-        io $ putStrLn $ "ClassPred " ++ show (pp c, pp tys)
+        -- io $ putStrLn $ "ClassPred " ++ show (pp c, pp tys)
         pure ([],[])
       IrredPred ty -> do
-        io $ putStrLn $ "IrredPred " ++ pp ty
+        -- io $ putStrLn $ "IrredPred " ++ pp ty
         pure ([],[])
       ForAllPred as bs cs -> do
-        io $ putStrLn $ "ForAllPred " ++ show (pp as, pp bs, pp cs)
+        -- io $ putStrLn $ "ForAllPred " ++ show (pp as, pp bs, pp cs)
         pure ([],[])
-      _ -> pure ([],[])
 
   results <- traverse tryToSolve wanteds
   pure $ TcPluginOk (results >>= fst) (results >>= snd)
