@@ -102,14 +102,14 @@ solveLogic () givens _deriveds wanteds = do
         , Just (n2, [x]) <- splitTyConApp_maybe nx, hasKey n2 notKey
         -> do
           wantedEvidence <- newWanted (ctLoc ct) $ mkTyConApp eqPrimTyCon [liftedTypeKind,liftedTypeKind,x,y]
-          io $ putStrLn $ "not-not: " ++ pp nnx ++ " ~ " ++ pp y ++ " if " ++ pp x ++ " ~ " ++ pp y
+          -- io $ putStrLn $ "not-not: " ++ pp nnx ++ " ~ " ++ pp y ++ " if " ++ pp x ++ " ~ " ++ pp y
           pure ([(evByFiat "not-not" nnx y, ct)],[mkNonCanonical wantedEvidence])
       EqPred NomEq y nnx
         | Just (n1, [nx]) <- splitTyConApp_maybe nnx, hasKey n1 notKey
         , Just (n2, [x]) <- splitTyConApp_maybe nx, hasKey n2 notKey
         -> do
           wantedEvidence <- newWanted (ctLoc ct) $ mkTyConApp eqPrimTyCon [liftedTypeKind,liftedTypeKind,x,y]
-          io $ putStrLn $ "not-not: " ++ pp y ++ " ~ " ++ pp nnx ++ " if " ++ pp x ++ " ~ " ++ pp y
+          -- io $ putStrLn $ "not-not: " ++ pp y ++ " ~ " ++ pp nnx ++ " if " ++ pp x ++ " ~ " ++ pp y
           pure ([(evByFiat "not-not" nnx y, ct)],[mkNonCanonical wantedEvidence])
       EqPred NomEq nx y 
         | Just (n1, [x]) <- splitTyConApp_maybe nx, hasKey n1 notKey
@@ -131,7 +131,7 @@ solveLogic () givens _deriveds wanteds = do
             (ctLoc ct) 
             (mkTyConApp eqPrimTyCon [liftedTypeKind,liftedTypeKind,nnx,x]) 
             (runEvExpr $ evByFiat "not-not-ish" nnx x)
-          io $ putStrLn $ "not-notish: " ++ pp nnx ++ " ~# " ++ pp x
+          -- io $ putStrLn $ "not-notish: " ++ pp nnx ++ " ~# " ++ pp x
           pure ([],[mkNonCanonical givenEvidence])
       EqPred n x y -> do
        -- io $ putStrLn $ "I think " ++ pp n ++ " " ++ pp x ++ pp y ++ " is none of my business"
@@ -141,7 +141,7 @@ solveLogic () givens _deriveds wanteds = do
         , Just (n1, [nx]) <- splitTyConApp_maybe nnx, hasKey n1 notKey
         , Just (n2, [x]) <- splitTyConApp_maybe nx, hasKey n2 notKey
         -> do
-        io $ putStrLn $ "Ooh ooh ooh: " ++ show (pp c, pp x, pp y)
+        -- io $ putStrLn $ "Ooh ooh ooh: " ++ show (pp c, pp x, pp y)
         wantedEvidence <- newWanted (ctLoc ct) $ mkTyConApp eqPrimTyCon [liftedTypeKind,liftedTypeKind,x,y]
 
 

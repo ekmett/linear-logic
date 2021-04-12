@@ -30,7 +30,7 @@
 {-# language UndecidableSuperClasses #-}
 {-# language ImportQualifiedPost #-}
 {-# language Trustworthy #-}
-{-# options_ghc -fplugin Linear.Logic.Plugin #-} -- TODO use this to kill Prep constraints
+-- {-# options_ghc -fplugin Linear.Logic.Plugin #-} -- TODO use this to kill Prep constraints
 
 -- {-# options_ghc -Wno-unused-imports #-}
 
@@ -142,7 +142,9 @@ instance Category (FUN 'One) where
 -- | Here we have the ability to provide more refutations, because we can walk
 -- all the way back to my arrows. This is internal to my logic.
 class (forall a b. (Prop' a, Prop' b) => Prop' (p a b)) => NiceCategory p where
+  -- o :: p b c ⊸ p a b ⊸ p a c 
   o :: (Lol l, Lol l', Prop a, Prop b, Prop c) => l (p b c) (l' (p a b) (p a c))
+
 
 instance Category (⊸) where
   id = Lol \case L -> \x -> x; R -> \x -> x

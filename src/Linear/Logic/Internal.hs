@@ -63,7 +63,7 @@ class Prep a => Prop' a where
   -- @
   (!=) :: a %1 -> Not a %1 -> r
 
--- avoids UndecidableSuperClasses:w
+-- avoids UndecidableSuperClasses
 type Prop a = (Prop' a, Prop' (Not a))
 
 -- | The unit for multiplicative conjunction, \(\texttt{()}\)
@@ -379,6 +379,14 @@ instance Prep a => Prop' (WhyNot a) where
   f != Ur a = because f a
   {-# inline (!=) #-}
 
+-- |
+-- @
+-- data DSum f g where
+--   (:=>) :: !(f a) -> g a -> DSum f g
+
+-- DSum (Y a b) Identity ~ Either a b
+-- DWith (Y a b) Identity ~ a & b
+-- @
 newtype DWith f g = DWith (forall x. f x %1 -> g x)
 
 dwith :: (forall x. f x %1 -> g x) %1 -> DWith f g
