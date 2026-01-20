@@ -31,6 +31,11 @@
 {-# options_haddock not-home #-}
 {-# options_ghc -Wno-unused-imports #-} -- toLinear is too damn convenient while debugging to keep erasing it
 
+-- | Core definitions for the linear logic embedding.
+--
+-- This module defines the basic proposition class, connectives, and
+-- refutation machinery. It is exposed for advanced use, but most users
+-- should prefer "Linear.Logic".
 module Linear.Logic.Internal where
 
 import Control.Applicative (Const(..))
@@ -48,9 +53,12 @@ import Linear.Logic.Orphans ()
 import Linear.Logic.Y
 import Unsafe.Linear (toLinear)
 
--- not is merely involutive. used to avoid passing dictionaries when they aren't used
+-- | Evidence that 'Not' is involutive for @a@.
+--
+-- This is used to avoid passing dictionaries when they aren't needed.
 type Prep a = Not (Not a) ~ a
 
+-- | Propositions with a specified refutation type.
 class Prep a => Prop' a where
   -- | \(a^\bot\). The type of refutations of \(a\)
   --
@@ -63,7 +71,9 @@ class Prep a => Prop' a where
   -- @
   (!=) :: a %1 -> Not a %1 -> r
 
--- avoids UndecidableSuperClasses
+-- | A proposition whose refutation is also a proposition.
+--
+-- This avoids 'UndecidableSuperClasses' by splitting the constraint.
 type Prop a = (Prop' a, Prop' (Not a))
 
 -- | The unit for multiplicative conjunction, \(\texttt{()}\)
@@ -128,7 +138,10 @@ data Y a b c where
   R :: Y a b b
 -}
 
--- With can be runtime rep polymorphic
+-- | Additive conjunction.
+--
+-- Laws: associative and commutative up to 'Iso', with unit 'Top'.
+-- This is Church-encoded as a choice of side via 'Y'.
 infixr 3 &
 type role (&) nominal nominal
 type (&) :: Type -> Type -> Type
@@ -189,6 +202,10 @@ instance (Prop' a, Prop' b) => Prop' (a & b) where
   w != Right b = withR' w != b
   {-# inline (!=) #-}
 
+-- | Additive disjunction.
+--
+-- Laws: associative and commutative up to 'Iso', with unit 'Void'.
+-- This is a synonym for 'Either'.
 infixr 2 +
 type (+) = Either
 
@@ -198,6 +215,10 @@ instance (Prop' a, Prop' b) => Prop' (Either a b) where
   Right a != w = a != withR' w
   {-# inline (!=) #-}
 
+-- | Multiplicative conjunction.
+--
+-- Laws: associative and commutative up to 'Iso', with unit @()@.
+-- This is a synonym for '(,)'.
 infixr 3 *
 type (*) = (,)
 
@@ -205,6 +226,8 @@ infixr 2 ⅋
 type (⅋) :: Type -> Type -> Type
 type role (⅋) nominal nominal
 -- | \(\par\) is multiplicative disjunction.
+--
+-- Laws: associative and commutative up to 'Iso', with unit 'Bot'.
 newtype a ⅋ b = Par (forall c. Y (Not b %1 -> a) (Not a %1 -> b) c -> c)
 
 type Par = (⅋)
@@ -273,7 +296,7 @@ instance Prop' b => Prop' (a %m -> b) where
   f != (Nofun a nb) = f a != nb
   {-# inline (!=) #-}
 
--- | The refutations of a linear haskell arrow are the same as the refutation of ⊸.
+-- | Refutations of a linear Haskell arrow, matching the refutation of @a ⊸ b@.
 data Nofun m b a where
   Nofun :: a %m -> Not b %1 -> Nofun m b a
 
@@ -295,14 +318,22 @@ type (%->) = FUN 'One
 --
 -- type p ⊸ q = Not p ⅋ q
 
+-- | Linear implication, encoded by a choice between proof and refutation.
+--
+-- Laws: contravariant in the domain and covariant in the codomain via
+-- 'contra''.
 newtype a ⊸ b = Lol (forall c. Y (Not b %1 -> Not a) (a %1 -> b) c -> c)
 
+-- | Directed apartness, i.e. a refutation of @a ⊸ b@.
 data b <#- a where (:-#>) :: a %1 -> Not b %1 -> b <#- a
 
 -- data a -#> b where (:-#>) :: a %1 -> Not b %1 -> a -#> b
 infixl 0 <#-
 infixr 3 :-#>
 
+-- | Symmetric notion of equivalence, encoded by a choice of direction.
+--
+-- Laws: involutive via 'inv' and symmetric via 'swap'.
 newtype a ⧟ b = Iso (forall c. Y (b ⊸ a) (a ⊸ b) c -> c)
 infixr 0 ⧟
 
@@ -312,9 +343,13 @@ runLol (Lol f) = f
 runIso :: a ⧟ b %1 -> Y (b ⊸ a) (a ⊸ b) c -> c
 runIso (Iso f) = f
 
--- | Sometimes linear haskell needs some help to infer that we really want linear usage
+-- | Sometimes linear haskell needs some help to infer that we really want linear usage.
 linear :: (a %1 -> b) %1 -> a %1 -> b
 linear = id
+
+-- | Unsafely coerce multiplicities when inference is too strict.
+unsafeLinear :: (a %p -> b) %1 -> a %q -> b
+unsafeLinear = toLinear
 
 instance C.Category (⊸) where
   id = Lol \case L -> id; R -> id
@@ -328,6 +363,7 @@ instance C.Category (⧟) where
     L -> runIso g L C.. runIso f L
     R -> runIso f R C.. runIso g R
 
+-- | Apartness for isomorphisms.
 data b # a
   = ApartL (Not a) b
   | ApartR a (Not b)
@@ -355,7 +391,9 @@ deriving stock instance (Read a, Read (Not b)) => Read (b <#- a)
 -- deriving stock instance (Eq a, Eq (Not b)) => Eq (a # b)
 -- deriving stock instance (Ord a, Ord (Not b)) => Ord (a # b)
 
--- | The \(?a\) or "why not?" modality.
+-- | The @?a@ or "why not?" modality.
+--
+-- Laws: dual to 'Ur' via 'Prop'' instances.
 type role WhyNot nominal
 newtype WhyNot a = WhyNot (forall r. Not a -> r)
 
@@ -366,7 +404,7 @@ because :: WhyNot a %1 -> Not a -> r
 because (WhyNot a) = a
 {-# inline because #-}
 
--- | The exponential, or unrestricted modality, \( !a \)
+-- | The exponential, or unrestricted modality, @!a@.
 --
 -- This embeds arbitrary non-linear Haskell values into 'Prop'.
 instance Prep a => Prop' (Ur a) where
@@ -379,7 +417,8 @@ instance Prep a => Prop' (WhyNot a) where
   f != Ur a = because f a
   {-# inline (!=) #-}
 
--- |
+-- | Experimental: dependent additives via 'Data.Dependent.Sum'.
+--
 -- @
 -- data DSum f g where
 --   (:=>) :: !(f a) -> g a -> DSum f g
@@ -397,6 +436,7 @@ runDWith (DWith f) = f
 
 type IPrep f = INot (INot f) ~ f
 
+-- | Experimental: indexed propositions.
 class
   ( IPrep f
   , forall a. Prop' (f a)
@@ -473,7 +513,10 @@ instance (IProp' f, IProp' g) => IProp' (f :⅋: g) where
   icontradict (IPar h) (f :*: g) = icontradict (h R f) g
   inot = Refl
 
--- | Ur a ⊸ b
+-- | Intuitionistic implication.
+--
+-- This is encoded as @Ur a ⊸ b@, i.e. a non-linear assumption in a
+-- linear codomain.
 newtype a ⊃ b = Imp
   (forall c. (Prop' a, Prop' b) => Y (Not b %1 -> WhyNot (Not a)) (a -> b) c -> c)
 

@@ -1,2 +1,5 @@
-dist-newstyle
-old
+dist-newstyle/
+old/
+.ghc.environment.*
+cabal.project.local
+cabal.project.local~

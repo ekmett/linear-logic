@@ -26,22 +26,22 @@ jobs:
     strategy:
       fail-fast: false
     steps:
-      - name: IRC success notification (irc.freenode.org#haskell-lens)
+      - name: IRC success notification (irc.libera.chat#haskell)
         uses: Gottox/irc-message-action@v1.1
         if: needs.linux.result == 'success'
         with:
-          channel: "#haskell-lens"
+          channel: "#haskell"
           message: "\x0313linear-logic\x03/\x0306${{ github.ref }}\x03 \x0314${{ github.sha }}\x03 https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }} The build succeeded."
           nickname: github-actions
-          server: irc.freenode.org
-      - name: IRC failure notification (irc.freenode.org#haskell-lens)
+          server: irc.libera.chat
+      - name: IRC failure notification (irc.libera.chat#haskell)
         uses: Gottox/irc-message-action@v1.1
         if: needs.linux.result != 'success'
         with:
-          channel: "#haskell-lens"
+          channel: "#haskell"
           message: "\x0313linear-logic\x03/\x0306${{ github.ref }}\x03 \x0314${{ github.sha }}\x03 https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }} The build failed."
           nickname: github-actions
-          server: irc.freenode.org
+          server: irc.libera.chat
   linux:
     name: Haskell-CI - Linux - ${{ matrix.compiler }}
     runs-on: ubuntu-18.04

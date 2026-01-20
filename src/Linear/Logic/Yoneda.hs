@@ -14,6 +14,7 @@
 {-# language TypeApplications #-}
 {-# options_ghc -Wno-unused-imports #-}
 
+-- | Yoneda and Coyoneda constructions for linear-logic functors.
 module Linear.Logic.Yoneda
 ( Yoneda(..)
 , Noneda(..)
@@ -34,8 +35,10 @@ import Linear.Logic.Internal
 import Linear.Logic.Functor
 import Linear.Logic.Y
 
+-- | Yoneda encoding for a linear-logic 'Functor'.
 newtype Yoneda f a = Yoneda (forall r. Prop' r => Ur (a ⊸ r) ⊸ f r)
 
+-- | Refutations of 'Yoneda'.
 data Noneda f a where
   Noneda :: Prop' r => {-# unpack #-} !(f r <#- Ur (a ⊸ r)) %1 -> Noneda f a
 
@@ -68,9 +71,11 @@ liftYoneda = iso \case
 lowerYoneda :: forall f a i. (Functor f, Prop' a, Iso i) => i (Yoneda f a) (f a)
 lowerYoneda = inv' liftYoneda
 
+-- | Coyoneda encoding for a linear-logic 'Functor'.
 data Coyoneda f a where
   Coyoneda :: Prop' r => (r ⊸ a) -> f r %1 -> Coyoneda f a
 
+-- | Refutations of 'Coyoneda'.
 newtype Cononeda f a = Cononeda (forall r. Prop' r => f r ⊸ WhyNot (a <#- r))
 
 runCononeda :: forall r l a f. (Prop' r, Lol l) => Cononeda f a %1 -> l (f r) (WhyNot (a <#- r))

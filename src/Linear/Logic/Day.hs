@@ -15,6 +15,7 @@
 {-# language TypeApplications #-}
 {-# options_ghc -Wno-unused-imports -fplugin Linear.Logic.Plugin #-}
 
+-- | Day convolution for linear-logic functors.
 module Linear.Logic.Day where
 
 import Data.Kind

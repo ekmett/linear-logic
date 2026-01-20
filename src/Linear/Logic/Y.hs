@@ -23,6 +23,7 @@
 {-# options_ghc -Wno-incomplete-patterns #-}
 #endif
 
+-- | Binary choice used to encode connectives.
 module Linear.Logic.Y 
 ( Y(L,R)
 ) where
@@ -31,10 +32,13 @@ import Data.Kind
 
 #ifdef LIFTED_Y
 
+-- | Binary choice.
 type Y :: i -> i -> i -> Type
 type role Y nominal nominal nominal
 data Y a b c where
+  -- | Left choice.
   L :: Y a b a
+  -- | Right choice.
   R :: Y a b b
 
 #else
@@ -53,6 +57,7 @@ upY :: Y a b c %1 -> Y' a b c
 upY (Y 0#) = unsafeCoerce L'
 upY (Y 1#) = unsafeCoerce R'
 
+-- | Unlifted binary choice.
 type Y :: i -> i -> i -> TYPE 'IntRep
 type role Y nominal nominal nominal
 newtype Y a b c = Y Int#

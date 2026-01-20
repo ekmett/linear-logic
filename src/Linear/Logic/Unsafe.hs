@@ -6,6 +6,7 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE GADTs #-}
 
+-- | Unsafe helpers intended for development-time use.
 module Linear.Logic.Unsafe
 ( toLinear
 , unsafePar

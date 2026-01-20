@@ -34,6 +34,7 @@
 
 -- {-# options_ghc -Wno-unused-imports #-}
 
+-- | Type classes and combinators for linear-logic functors and profunctors.
 module Linear.Logic.Functor where
 
 import Data.Type.Equality
@@ -43,19 +44,39 @@ import GHC.Types
 import Linear.Logic.Internal
 import Linear.Logic.Y
 import Prelude.Linear hiding (id,(.),flip,Semigroup(..), Monoid(..))
+#if __GLASGOW_HASKELL__ >= 904
+import Unsafe.Coerce (unsafeCoerce)
+#endif
 
+-- | Type family relating an isomorphism-like connective to its apartness.
 type family NotApart (p :: Type -> Type -> Type) :: Type -> Type -> Type
 
+-- | Isomorphism-like connectives with a distinguished refutation.
+--
+-- Laws:
+--
+-- * 'notIso' and 'notApart' witness an involution between @p@ and its
+--   refutation.
 class
   ( forall a b. (Prop' a, Prop' b) => Prop' (p a b)
   , NotApart (NotIso p) ~ p
   ) => Iso p where
   type NotIso p = (q :: Type -> Type -> Type) | q -> p
+  -- | Construct from either direction.
   iso :: (forall c. Y (b ⊸ a) (a ⊸ b) c -> c) %1 -> p a b
+  -- | Extract apartness from a refutation.
   apart :: Not (p a b) %1 -> b # a
+  -- | Witness the refutation type for this connective.
   notIso :: NotIso p b a :~: Not (p a b)
+  -- | Involution law for apartness.
   notApart :: NotApart (NotIso p) a b :~: p a b
 
+-- | "Lollipop" connectives which can be introduced by either a proof
+-- or a refutation transformation.
+--
+-- Laws:
+--
+-- * 'apartR' should be coherent with 'apart' for the underlying connective.
 class (Iso p, Profunctor p) => Lol (p :: Type -> Type -> Type) where
   lol :: (forall c. Y (Not b %1 -> Not a) (a %1 -> b) c -> c) %1 -> p a b
   apartR :: Not (p a b) %1 -> b <#- a
@@ -80,7 +101,7 @@ type instance NotApart Noimp = (⊃)
 instance Iso (⊃) where
   type NotIso (⊃) = Noimp
   iso f = Imp \case
-    R -> fun (f R)
+    R -> unsafeLinear (fun (f R))
     L -> \nb -> whyNot \a -> a != runLol (f R) L nb
   apart (Noimp a nb) = ApartR a nb
   notIso = Refl
@@ -92,7 +113,7 @@ instance Lol (⊸) where
 
 type instance NotApart (Nofun m) = FUN m
 
-instance Iso (FUN m) where
+instance (m ~ 'One) => Iso (FUN m) where
   type NotIso (FUN m) = Nofun m
   iso f = \x -> fun' (f R) x
   apart (Nofun a nb) = ApartR a nb
@@ -100,7 +121,7 @@ instance Iso (FUN m) where
   notApart = Refl
 
 
-instance Lol (FUN m) where
+instance (m ~ 'One) => Lol (FUN m) where
   lol f = \x -> linear (f R) x
   apartR (Nofun a nb) = a :-#> nb
 
@@ -131,6 +152,7 @@ funIso = lol \case
   L -> apart
   R -> \(Iso f) -> iso f
 
+-- | Category structure for linear-logic morphisms.
 class Category p where
   id :: Prop' a => p a a
   (.) :: (Prop' a, Prop' b, Prop' c) => p b c %1 -> p a b %1 -> p a c
@@ -139,8 +161,7 @@ instance Category (FUN 'One) where
   id x = x
   f . g = \x -> f (g x)
 
--- | Here we have the ability to provide more refutations, because we can walk
--- all the way back to my arrows. This is internal to my logic.
+-- | A category that exposes extra refutation structure.
 class (forall a b. (Prop' a, Prop' b) => Prop' (p a b)) => NiceCategory p where
   -- o :: p b c ⊸ p a b ⊸ p a c 
   o :: (Lol l, Lol l', Prop a, Prop b, Prop c) => l (p b c) (l' (p a b) (p a c))
@@ -155,7 +176,7 @@ instance Category (⊸) where
 instance NiceCategory (⊸) where
   o = lol \case
     L -> \nf -> apartR nf & \(a2b :-#> a :-#> nc) -> fun a2b a :-#> nc
-    R -> \bc -> lol \case
+    R -> unsafeLinear \bc -> lol \case
       L -> \(a :-#> nc) -> a :-#> runLol bc L nc
       R -> (bc .)
 
@@ -170,7 +191,7 @@ instance NiceCategory (⧟) where
     L -> \nf -> apartR nf & \case
       iab :-#> ApartL na c -> ApartL (runLol (runIso iab L) L na) c
       iab :-#> ApartR a nc -> ApartR (runLol (runIso iab R) R a) nc
-    R -> \bc -> lol \case
+    R -> unsafeLinear \bc -> lol \case
       L -> \case
         ApartL na c -> ApartL na (runLol (runIso bc L) R c)
         ApartR a nc -> ApartR a (runLol (runIso bc R) L nc)
@@ -184,11 +205,21 @@ liftUr = lol \case
     L -> \nb -> whyNot \a -> fun' a2b a != nb
   L -> \nf -> apartR nf & \(Ur a :-#> nb) -> whyNot \a2b -> fun' a2b a != nb
 
+-- | Functors that transport linear-logic structure.
+--
+-- Laws:
+--
+-- @
+-- 'fmap' 'id' = 'id'
+-- 'fmap' (g '.' f) = 'fmap' g '.' 'fmap' f
+-- @
 class
   ( forall a. Prop' a => Prop' (f a)
   ) => Functor f where
+  -- | Map a linear function inside @f@, using a suspended implication.
   fmap' :: (Prop' a, Prop' b, Lol l, Lol l') => l (Ur (a ⊸ b)) (l' (f a) (f b))
 
+-- | Map a linear function inside @f@.
 fmap :: forall f a b l. (Functor f, Prop' a, Prop' b, Lol l) => (a ⊸ b) -> l (f a) (f b)
 fmap  f = fmap' (Ur f)
 
@@ -204,9 +235,9 @@ fmapIso' = lol \case
 fmapIso :: (Functor f, Prop' a, Prop' b, Iso i) => (a ⧟ b) -> i (f a) (f b)
 fmapIso f = fmapIso' (Ur f)
 
-instance Functor (FUN m a) where
+instance (m ~ 'One) => Functor (FUN m a) where
   fmap' = lol \case
-    L -> \nf -> apartR nf & \(a2b :-#> Nofun a nc) -> WhyNot \c2b -> a2b a != runLol c2b L nc
+    L -> \nf -> apartR nf & linear \(a2b :-#> Nofun a nc) -> WhyNot \c2b -> a2b a != runLol c2b L nc
     R -> \(Ur xb) -> lol \case
       L -> linear \(Nofun a nb) -> Nofun a (runLol xb L nb)
       R -> \a2x a -> fun' xb (a2x a)
@@ -216,7 +247,7 @@ instance Prop x => Functor ((⊃) x) where
     L -> \nf -> apartR nf & \(xia :-#> Noimp x nb) ->
       WhyNot \a2b -> fun' a2b (runImp xia R x) != nb
     R -> \(Ur a2b) -> lol \case
-      L -> linear \(Noimp x nb) -> Noimp x (contra' a2b nb)
+      L -> linear \(Noimp x nb) -> Noimp x (contra1 a2b nb)
       R -> \xia -> imp \case
         L -> linear \nb -> WhyNot \x -> runLol a2b R (impR' xia x) != nb
         R -> \x -> fun' a2b (impR' xia x)
@@ -228,7 +259,7 @@ instance Prop x => Functor ((,) x) where
     R -> \(Ur f) -> lol \case
       L -> \nxpnb -> par \case
         L -> \a -> parL' nxpnb (fun' f a)
-        R -> \x -> contra' f (parR' nxpnb x)
+        R -> \x -> contra1 f (parR' nxpnb x)
       R -> \(x, a) -> (x, fun' f a)
 
 instance Prop x => Functor ((⊸) x) where
@@ -237,11 +268,14 @@ instance Prop x => Functor ((⊸) x) where
     L -> \nf -> apartR nf & \(x2a :-#> x :-#> nb) ->
       WhyNot \a2b -> fun' a2b (fun' x2a x) != nb
     R -> \(Ur f) -> lol \case
-      L -> \x -> x & \(a :-#> nb) -> a :-#> contra' f nb
+      L -> linear \x -> x & \(a :-#> nb) -> a :-#> contra1 f nb
       R -> linear \g -> lol \case
-        L -> linear \nb -> contra' g (contra' f nb)
+        L -> linear \nb -> contra1 g (contra1 f nb)
         R -> \a -> fun' f (fun' g a)
 
+-- | Functors that preserve full propositions (not just 'Prop'').
+--
+-- Laws: as for 'Functor', but for full 'Prop' evidence.
 class Functor f => MFunctor f where
   mfmap :: (Prop a, Prop b, Lol l, Lol l') =>  l (a ⊸ b) (l' (f a) (f b))
 
@@ -278,11 +312,11 @@ instance Prop x => MFunctor ((⅋) x) where
 instance Prop x => MFunctor ((⊸) x) where
   mfmap = lol \case
     L -> \nf -> apartR nf & \(x2a :-#> x :-#> nb) -> fun' x2a x :-#> nb
-    R -> \a2b -> lol \case
+    R -> unsafeLinear \a2b -> lol \case
       L -> \(x :-#> nb) -> x :-#> contra' a2b nb
       R -> (a2b .)
 
-instance Prop x => MFunctor (FUN m x) where
+instance (m ~ 'One, Prop x) => MFunctor (FUN m x) where
   mfmap = lol \case
     L -> \nf -> apartR nf & linear \(x2a :-#> Nofun x nb) -> linear (:-#>) (x2a x) nb
     R -> \(a2b :: a ⊸ b) -> lol \case
@@ -338,11 +372,22 @@ instance Prop a => Functor ((⅋) a) where
       apc :-#> (na,nb) ->
         WhyNot \c2b -> parR' apc na != contra' c2b nb
     R -> \(Ur f) -> lol \case
-      L -> \(na,nb) -> (na, contra' f nb)
+      L -> \(na,nb) -> (na, contra1 f nb)
       R -> \apa1 -> par \case
-        L -> \nb -> parL' apa1 (contra' f nb)
+        L -> \nb -> parL' apa1 (contra1 f nb)
         R -> \na -> fun' f (parR' apa1 na)
 
+-- | Linear-logic adjunctions between @f@ and @g@.
+--
+-- Laws:
+--
+-- Let @eta_a :: a ⊸ g (f a)@ and @eps_a :: f (g a) ⊸ a@ be
+-- @eta_a = runIso adj R id@ and @eps_a = runIso adj L id@. Then:
+--
+-- @
+-- 'fmap' eps_a '.' eta_{f a} = 'id'
+-- 'fmap' eta_a '.' eps_{g a} = 'id'
+-- @
 class (Functor f, Functor g) => Adjunction f g | f -> g, g -> f where
   adj :: (Iso iso, Prop a, Prop b) => iso (f a ⊸ b) (a ⊸ g b)
 
@@ -380,6 +425,14 @@ instance Prop b => Functor ((<#-) b) where
       L -> \c2b -> c2b . a2c
       R -> linear \(a :-#> nb) -> fun' a2c a :-#> nb
 
+-- | Contravariant functors for linear logic.
+--
+-- Laws:
+--
+-- @
+-- 'contramap' 'id' = 'id'
+-- 'contramap' (g '.' f) = 'contramap' f '.' 'contramap' g
+-- @
 class
   ( forall a. Prop' a => Prop' (f a)
   ) => Contravariant f where
@@ -389,6 +442,14 @@ class
 contramap :: (Contravariant f, Prop a, Prop b, Lol l) => (a ⊸ b) -> l (f b) (f a)
 contramap f = contramap' (Ur f)
 
+-- | Profunctors in the linear-logic setting.
+--
+-- Laws:
+--
+-- @
+-- 'dimap' 'id' 'id' = 'id'
+-- 'dimap' f2 g2 '.' 'dimap' f1 g1 = 'dimap' (f1 '.' f2) (g2 '.' g1)
+-- @
 class
   ( forall a. Prop a => Functor (t a)
   ) => Profunctor t where
@@ -428,10 +489,10 @@ instance Profunctor (⊸) where
       Ur c2d :-#> nh -> apartR nh & \(b2c :-#> a :-#> nd) ->
         WhyNot \a2b -> fun' c2d (fun' b2c (fun' a2b a)) != nd
     R -> \(Ur f) -> lol \case
-      L -> \ng -> apartR ng & \(b2c :-#> a :-#> nd) ->
+      L -> linear \ng -> apartR ng & \(b2c :-#> a :-#> nd) ->
          WhyNot \c2d -> fun' c2d (fun' b2c (fun' f a)) != nd
       R -> \(Ur g) -> lol \case
-        L -> linear \(a :-#> nd) -> fun' f a :-#> contra' g nd
+        L -> linear \(a :-#> nd) -> fun' f a :-#> contra1 g nd
         R -> linear \h -> g . h . f
 
 instance Profunctor (<#-) where
@@ -440,13 +501,13 @@ instance Profunctor (<#-) where
       apartR nj & \((c :-#> nb) :-#> d2a) ->
         WhyNot \a2b -> fun' a2b (fun' d2a (fun' c2d c)) != nb
     R -> \(Ur a2b) -> lol \case
-      L -> \ni -> apartR ni & \((c :-#> nb) :-#> d2a) ->
+      L -> linear \ni -> apartR ni & \((c :-#> nb) :-#> d2a) ->
         WhyNot \c2d -> fun' a2b (fun' d2a (fun' c2d c)) != nb
       R -> \(Ur c2d) -> lol \case
         L -> \d2a -> lol \case
-          L -> linear \nb -> contra' c2d (contra' d2a (contra' a2b nb))
+          L -> linear \nb -> contra1 c2d (fun' (contra' d2a) (contra1 a2b nb))
           R -> \c -> fun' a2b (fun' d2a (fun' c2d c))
-        R -> linear \(c :-#> nb) -> fun' c2d c :-#> contra' a2b nb
+        R -> linear \(c :-#> nb) -> fun' c2d c :-#> contra1 a2b nb
 
 instance Prop y => Functor (Noimp y) where
   fmap' = lol \case
@@ -459,10 +520,10 @@ instance Prop y => Functor (Noimp y) where
         R -> \a -> impR' biy (fun' a2b a)
       R -> \(Noimp a ny) -> Noimp (fun' a2b a) ny
 
-instance Prop y => Functor (Nofun m y) where
+instance (m ~ 'One, Prop y) => Functor (Nofun m y) where
   fmap' = lol \case
-    L -> \ni -> apartR ni & \case
-      Nofun a ny :-#> b2y -> WhyNot \a2b -> b2y (fun' a2b a) != ny
+    L -> linear \ni -> apartR ni & linear \case
+      Nofun a ny :-#> b2y -> WhyNot (unsafeLinear \a2b -> b2y (fun' a2b a) != ny)
     R -> \(Ur (a2b :: a ⊸ b)) -> lol \case
       L -> \(b2y :: b %m -> y) a -> b2y (fun' a2b a)
       R -> linear \(Nofun a ny :: Nofun m y a) -> Nofun (fun' a2b a) ny
@@ -473,45 +534,71 @@ instance Profunctor Noimp where
       Ur c2d :-#> nj -> apartR nj & \case
         Noimp c nb :-#> d2a -> WhyNot \a2b -> fun' a2b (impR' d2a (fun' c2d c)) != nb
     R -> \(Ur a2b) -> lol \case
-      L -> \nj -> apartR nj & \case
+      L -> linear \nj -> apartR nj & \case
         Noimp c nb :-#> d2a -> WhyNot \c2d -> fun' a2b (impR' d2a (fun' c2d c)) != nb
       R -> \(Ur c2d) -> lol \case
         L -> linear \dia -> imp \case
-          L -> \nb -> WhyNot \c -> dia != Noimp (fun' c2d c) (contra' a2b nb)
+          L -> \nb -> WhyNot \c -> dia != Noimp (fun' c2d c) (contra1 a2b nb)
           R -> \c -> fun' a2b (impR' dia (fun' c2d c))
-        R -> linear \(Noimp c nb) -> Noimp (fun' c2d c) (contra' a2b nb)
+        R -> linear \(Noimp c nb) -> Noimp (fun' c2d c) (contra1 a2b nb)
 
-instance Profunctor (Nofun m) where
+instance (m ~ 'One) => Profunctor (Nofun m) where
   dimap' = lol \case
     L -> \ni -> apartR ni & \case
-      Ur c2d :-#> nj -> apartR nj & \case
-        Nofun c nb :-#> d2a -> WhyNot \a2b -> fun' a2b (d2a (fun' c2d c)) != nb
+      Ur c2d :-#> nj -> apartR nj & linear \case
+        Nofun c nb :-#> d2a -> WhyNot (unsafeLinear \a2b -> fun' a2b (d2a (fun' c2d c)) != nb)
     R -> \(Ur (a2b :: a ⊸ b)) -> lol \case
-      L -> \ni -> apartR ni & \case
-        Nofun c nb :-#> d2a -> WhyNot \c2d -> fun' a2b (d2a (fun' c2d c)) != nb
+      L -> linear \ni -> apartR ni & linear \case
+        Nofun c nb :-#> d2a -> WhyNot (unsafeLinear \c2d -> fun' a2b (d2a (fun' c2d c)) != nb)
       R -> \(Ur (c2d :: c ⊸ d)) -> lol \case
         L -> \d2a -> (\c -> fun' a2b (d2a (fun' c2d c))) :: c %m -> b
         R -> linear \case
          (Nofun c nb :: Nofun m b c) ->
-           Nofun (fun' c2d c) (contra' a2b nb) :: Nofun m a d
+           Nofun (fun' c2d c) (contra1 a2b nb) :: Nofun m a d
 
-instance Profunctor (FUN m) where
+#if __GLASGOW_HASKELL__ >= 904
+instance Profunctor (FUN 'One) where
   dimap' = lol \case
     L -> \nf -> apartR nf & \case
-      Ur c2d :-#> nh -> apartR nh & \case
-        b2c :-#> Nofun a nd -> contra' c2d nd & \nc ->
-          WhyNot \a2b -> b2c (fun' a2b a) != nc
+      Ur c2d :-#> nh -> apartR nh & unsafeLinear \case
+        b2c :-#> n ->
+          let Nofun a nd = unsafeNofun n
+          in contra1 c2d nd & \nc ->
+            WhyNot (unsafeLinear \a2b -> b2c (fun' a2b a) != nc)
     R -> \(Ur (a2b :: a ⊸ b)) -> lol \case
-      L -> \ng -> apartR ng & linear \(b2c :-#> Nofun a nd) ->
-        WhyNot \(c2d :: c ⊸ d) ->
-          b2c != (Nofun (fun' a2b a) (contra' c2d nd) :: Nofun m c b)
+      L -> linear \ng -> apartR ng & unsafeLinear \case
+        b2c :-#> n ->
+          let Nofun a nd = unsafeNofun n
+              a2b_a = fun' a2b a
+          in WhyNot (unsafeLinear \(c2d :: c ⊸ d) ->
+            b2c != (Nofun a2b_a (contra1 c2d nd) :: Nofun 'One c b))
+      R -> \(Ur (c2d :: c ⊸ d)) -> lol \case
+        R -> \b2c a -> fun' c2d (b2c (fun' a2b a))
+        L -> unsafeLinear \n ->
+          let Nofun a nd = unsafeNofun n
+          in Nofun (fun' a2b a) (contra1 c2d nd)
+#else
+instance (m ~ 'One) => Profunctor (FUN m) where
+  dimap' = lol \case
+    L -> \nf -> apartR nf & \case
+      Ur c2d :-#> nh -> apartR nh & linear \case
+        b2c :-#> Nofun a nd -> contra1 c2d nd & \nc ->
+          WhyNot (unsafeLinear \a2b -> b2c (fun' a2b a) != nc)
+    R -> \(Ur (a2b :: a ⊸ b)) -> lol \case
+      L -> linear \ng -> apartR ng & linear \pair ->
+        case pair of
+          b2c :-#> Nofun a nd ->
+            let a2b_a = fun' a2b a
+            in WhyNot (unsafeLinear \(c2d :: c ⊸ d) ->
+              b2c != (Nofun a2b_a (unsafeLinear (contra' c2d) nd) :: Nofun m c b))
       R -> \(Ur (c2d :: c ⊸ d)) -> lol \case
         R -> go where
           go :: (b %m -> c) %1 -> a %m -> d
           go b2c a = fun' c2d (b2c (fun' a2b a))
         L -> go where
           go :: Nofun m d a %1 -> Nofun m c b
-          go (Nofun a nd) = Nofun (fun' a2b a) (contra' c2d nd)
+          go (Nofun a nd) = Nofun (fun' a2b a) (unsafeLinear (contra' c2d) nd)
+#endif
 
 instance Profunctor (⊃) where
   dimap' = lol \case
@@ -519,12 +606,12 @@ instance Profunctor (⊃) where
       apartR nj & \(bic :-#> Noimp a nd) ->
         WhyNot \a2b -> bic != Noimp (fun' a2b a) (contra' c2d nd)
     R -> \(Ur (a2b :: a  ⊸ b)) -> lol \case
-      L -> \ng -> apartR ng & \(bic :-#> Noimp a nd) ->
+      L -> linear \ng -> apartR ng & \(bic :-#> Noimp a nd) ->
         WhyNot \c2d -> bic != Noimp (fun' a2b a) (contra' c2d nd)
       R -> \(Ur (c2d :: c ⊸ d)) -> lol \case
-        L -> linear \(Noimp a nd) -> Noimp (fun' a2b a) (contra' c2d nd)
+        L -> linear \(Noimp a nd) -> Noimp (fun' a2b a) (contra1 c2d nd)
         R -> \bic -> imp \case
-          L -> linear \nd -> WhyNot \a -> bic != Noimp (fun' a2b a) (contra' c2d nd)
+          L -> linear \nd -> WhyNot \a -> bic != Noimp (fun' a2b a) (contra1 c2d nd)
           R -> \a -> fun' c2d (impR' bic (fun' a2b a))
 
 class Profunctor t => MProfunctor t where
@@ -545,6 +632,14 @@ instance MProfunctor (⊸) where
           L -> \nd -> contra' a2b (contra' b2c (contra' c2d nd))
           R -> \a -> fun' c2d (fun' b2c (fun' a2b a))
 
+-- | Bifunctors in the linear-logic setting.
+--
+-- Laws:
+--
+-- @
+-- 'bimap' 'id' 'id' = 'id'
+-- 'bimap' f2 g2 '.' 'bimap' f1 g1 = 'bimap' (f2 '.' f1) (g2 '.' g1)
+-- @
 class
   ( forall a. Prop a => Functor (t a)
   ) => Bifunctor t where
@@ -602,13 +697,13 @@ instance Bifunctor (,) where
       apartR nk & \((a,c) :-#> nbpnd) -> WhyNot \a2b ->
         fun' c2d c != parR' nbpnd (fun' a2b a)
     R -> \(Ur f) -> lol \case
-      L -> \ng -> apartR ng & \((a, c) :-#> nbpnd) ->
+      L -> linear \ng -> apartR ng & \((a, c) :-#> nbpnd) ->
         WhyNot \c2d -> fun' f a != parL' nbpnd (fun c2d c)
       R -> \(Ur g) -> lol \case
         L -> \nbpnd -> par \case
-          L -> linear \c -> contra' f (parL' nbpnd (fun g c))
-          R -> linear \a -> contra' g (parR' nbpnd (fun f a))
-        R -> \(a, c) -> (fun f a, fun g c)
+          L -> linear \c -> contra1 f (parL' nbpnd (fun' g c))
+          R -> linear \a -> contra1 g (parR' nbpnd (fun' f a))
+        R -> \(a, c) -> (fun' f a, fun' g c)
 
 instance Bifunctor (&) where
   bimap' = lol \case
@@ -632,23 +727,48 @@ instance Bifunctor (⅋) where
   bimap' = lol \case
     L -> \nf -> apartR nf & \(Ur c2d :-#> nk) ->
       apartR nk & \(apc :-#> (nb, nd)) ->
-        whyNot \a2b -> parR apc (contra' a2b nb) != contra' c2d nd
+        whyNot \a2b -> parR apc (contra1 a2b nb) != contra1 c2d nd
     R -> \(Ur f) -> lol \case
-      L -> \ng -> apartR ng & \(apc :-#> (nb, nd)) -> whyNot \c2d -> parR apc (contra' f nb) != contra' c2d nd
+      L -> linear \ng -> apartR ng & \(apc :-#> (nb, nd)) -> whyNot \c2d -> parR apc (contra1 f nb) != contra1 c2d nd
       R -> \(Ur g) -> lol \case
-        L -> \(nb,nd) -> (contra' f nb, contra' g nd)
+        L -> \(nb,nd) -> (contra1 f nb, contra1 g nd)
         R -> \apc -> par \case
-          L -> \nd -> fun' f (parL' apc (contra' g nd))
-          R -> \nb -> fun' g (parR' apc (contra' f nb))
+          L -> \nd -> fun' f (parL' apc (contra1 g nd))
+          R -> \nb -> fun' g (parR' apc (contra1 f nb))
 
--- TODO MBifunctor
+-- | Multiplicative bifunctors.
+--
+-- These are intended for tensor-like and par-like connectives; the
+-- additive ones do not support a linear mapping on both sides.
+class Bifunctor t => MBifunctor t where
+  mbimap
+    :: (Prop a, Prop b, Prop c, Prop d)
+    => (a ⊸ b) -> (c ⊸ d) -> t a c ⊸ t b d
 
+instance MBifunctor (,) where
+  mbimap a2b c2d = Lol \case
+    L -> bimap (contra' a2b) (contra' c2d)
+    R -> \(a, c) -> (fun' a2b a, fun' c2d c)
+
+instance MBifunctor (⅋) where
+  mbimap a2b c2d = Lol \case
+    L -> bimap (contra' a2b) (contra' c2d)
+    R -> \apc -> par \case
+      L -> \nd -> fun' a2b (parL' apc (fun' (contra' c2d) nd))
+      R -> \nb -> fun' c2d (parR' apc (fun' (contra' a2b) nb))
+
+-- | Associativity for a bifunctorial tensor.
+--
+-- Laws: 'assoc' and 'unassoc' are inverses up to 'Iso'.
 class Bifunctor t => Semimonoidal t where
   assoc :: (Prop a, Prop b, Prop c, Iso iso) => t (t a b) c `iso` t a (t b c)
 
 unassoc :: (Semimonoidal t, Iso iso, Prop a, Prop b, Prop c) => t a (t b c) `iso` t (t a b) c
 unassoc = inv' assoc
 
+-- | A semimonoidal tensor with a unit.
+--
+-- Laws: @lambda@ and @rho@ are natural and inverse to their un- variants.
 class (Prop (I t), Semimonoidal t) => Monoidal t where
   type I t :: Type
   lambda :: (Prop a, Iso iso) => a `iso` t (I t) a
@@ -660,9 +780,13 @@ unlambda = inv' lambda
 unrho :: (Monoidal t, Prop a, Iso iso) => t a (I t) `iso` a
 unrho = inv' rho
 
+-- | Symmetry for a tensor.
+--
+-- Laws: @swap . swap ≡ id@.
 class Symmetric t where
   swap :: (Prop a, Prop b, Iso iso) => t a b `iso` t b a
 
+-- | A symmetric monoidal tensor.
 class (Symmetric t, Monoidal t) => SymmetricMonoidal t
 
 instance Semimonoidal Either where
@@ -724,11 +848,23 @@ instance Symmetric (#) where
 instance Symmetric (⧟) where
   swap = inv
 
+-- | Weak distribution of a functor over a bifunctor.
+--
+-- Laws:
+--
+-- For @f :: b ⊸ b'@ and @g :: c ⊸ c'@:
+--
+-- @
+-- 'bimap' ('fmap' f) ('fmap' g) '.' 'weakDist' = 'weakDist' '.' 'fmap' ('bimap' f g)
+-- @
 class (Functor f, Bifunctor p) => WeakDist f p where
   weakDist :: (Lol l, Prop b, Prop c) => l (f (p b c)) (p (f b) (f c))
   default weakDist :: (Lol l, Prop b, Prop c, Dist f p) => l (f (p b c)) (p (f b) (f c))
   weakDist = weakDist
 
+-- | Strong distribution as an isomorphism.
+--
+-- Laws: @dist@ witnesses a two-sided inverse for 'weakDist'.
 class WeakDist f p => Dist f p where
   dist :: (Iso iso, Prop b, Prop c) => iso (f (p b c)) (p (f b) (f c))
 
@@ -1394,7 +1530,7 @@ duplicateUr = lol \case
 dupUr :: (Iso i, Prop a) => i (Ur a) (Ur a * Ur a)
 dupUr = iso \case
   L -> lol \case
-    L -> \n -> par \case
+    L -> unsafeLinear \n -> par \case
       L -> (n !=)
       R -> (n !=)
     R -> \(Ur a, Ur{}) -> (Ur a)
@@ -1456,6 +1592,14 @@ contra'' :: forall l p q. (Lol l, Prep p, Prep q) => p ⊸ q %1 -> l (Not q) (No
 contra'' = \(Lol f) -> lol \case
   L -> \na -> f R na
   R -> \nb -> f L nb
+
+contra1 :: (Prep p, Prep q) => (p ⊸ q) %1 -> Not q %1 -> Not p
+contra1 f = contra' f
+
+#if __GLASGOW_HASKELL__ >= 904
+unsafeNofun :: Nofun 'One b a %1 -> Nofun 'Many b a
+unsafeNofun = unsafeLinear unsafeCoerce
+#endif
 
 contra' :: forall l l' p q. (Lol l, Lol l', Prep p, Prep q) => l (p ⊸ q) (l' (Not q) (Not p))
 contra' = lol \case
@@ -1562,6 +1706,16 @@ instance (Monoid a, Monoid b) => Monoid (a & b) where
     R -> mempty
 
 -- strong closed functors
+-- | Applicative structure for linear-logic functors.
+--
+-- Laws:
+--
+-- @
+-- 'pure' 'id' '<*>' v = v
+-- 'pure' '(.)' '<*>' u '<*>' v '<*>' w = u '<*>' (v '<*>' w)
+-- 'pure' f '<*>' 'pure' x = 'pure' (f x)
+-- u '<*>' 'pure' y = 'pure' (\f -> f y) '<*>' u
+-- @
 class Functor f => Applicative f where
   pure :: (Prop a, Lol l) => l a (f a)
   (<*>)

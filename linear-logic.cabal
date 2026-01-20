@@ -9,7 +9,7 @@ stability: experimental
 homepage: https://github.com/ekmett/linear-logic/
 bug-reports: https://github.com/ekmett/linear-logic/issues
 copyright: Copyright 2021 Edward A. Kmett
-version: 0
+version: 0.0.1
 build-type: Simple
 synopsis: linear logic
 description:
@@ -43,11 +43,17 @@ description:
     .
     Negative polarity connectives are 'GHC.Types.RuntimeRep' polymorphic,
     but only currently have 'Prop' instances defined for ''LiftedRep'
-tested-with: ghc == 9.0.1
+tested-with:
+  ghc == 9.2.8
+  ghc == 9.4.8
+  ghc == 9.6.4
+  ghc == 9.8.2
+  ghc == 9.10.1
 
 extra-source-files:
   CHANGELOG.md
   README.md
+  AGENTS.md
 
 source-repository head
   type: git
@@ -57,14 +63,14 @@ library
   hs-source-dirs: src
   default-language: Haskell2010
   build-depends:
-    base,
-    contravariant,
-    dependent-sum,
-    ghc,
-    ghc-tcplugins-extra,
-    some,
-    ghc-prim,
-    linear-base
+    base >=4.16 && <4.21,
+    contravariant >=1.5 && <1.6,
+    dependent-sum >=0.7 && <0.9,
+    ghc >=9.2 && <9.11,
+    ghc-tcplugins-extra >=0.4 && <0.6,
+    some >=1.0 && <1.3,
+    ghc-prim >=0.8 && <0.12,
+    linear-base >=0.4 && <0.6
   ghc-options:
     -Wall -fexpose-all-unfoldings -fspecialize-aggressively
     -fno-show-valid-hole-fits
@@ -80,3 +86,28 @@ library
     Linear.Logic.Orphans
     Linear.Logic.Plugin
     Linear.Logic.Y
+
+test-suite plugin-canary
+  type: exitcode-stdio-1.0
+  hs-source-dirs: test
+  main-is: PluginCanary.hs
+  default-language: Haskell2010
+  build-depends:
+    base >=4.16 && <4.21,
+    linear-logic
+  ghc-options:
+    -Wall
+    -fplugin Linear.Logic.Plugin
+
+test-suite logic-properties
+  type: exitcode-stdio-1.0
+  hs-source-dirs: test
+  main-is: LogicProperties.hs
+  default-language: Haskell2010
+  build-depends:
+    base >=4.16 && <4.21,
+    HUnit >=1.6 && <1.7,
+    linear-base >=0.4 && <0.6,
+    linear-logic
+  ghc-options:
+    -Wall

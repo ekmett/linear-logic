@@ -3,6 +3,17 @@
 {-# language Trustworthy #-}
 
 -- |
+-- Overview
+-- ========
+--
+-- This package presents a full intuitionistic linear logic on top of
+-- Linear Haskell. The central representation is a Chu-style encoding:
+-- each proposition @a@ carries both a proof type and a refutation type
+-- @Not a@, with contradiction represented by 'Void'. This construction
+-- yields an involutive negation (@Not (Not a) ~ a@) without forcing the
+-- ambient logic to be classical, so you retain a constructive core while
+-- recovering the missing linear unitors.
+--
 -- <https://arxiv.org/pdf/1805.07518.pdf Linear Logic for Constructive Mathematics>
 -- by Michael Shulman provides a principled take on this topic. There he constructs
 -- an embedding of an affine logic into an intuitionistic logic via a Chu construction.
@@ -93,4 +104,3 @@ import Linear.Logic.Internal
 import Linear.Logic.Functor
 import Linear.Logic.Y
 import Data.Void
-
