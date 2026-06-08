@@ -31,15 +31,15 @@ data Day f g a where
   Day :: (Prop' b, Prop' c) => ((b,c) ⊸ a) %1 -> f b %1 -> g c %1 -> Day f g a
 
 -- | refuted Day convolution of logical functors
-newtype Noday f g a = Noday 
+newtype Night f g a = Night 
   ( forall b c. (Prop' b, Prop' c) =>
     (a <#- (b,c)) ⅋ Not (f b) ⅋ Not (g c)
   )
 
 instance (Functor f, Functor g, Prop' a) => Prop' (Day f g a) where
-  type Not (Day f g a) = Noday f g a 
-  Day bca (fb :: f b) gc != Noday no = (bca,(fb,gc)) != no
+  type Not (Day f g a) = Night f g a 
+  Day bca (fb :: f b) gc != Night no = (bca,(fb,gc)) != no
 
-instance (Functor f, Functor g, Prop' a) => Prop' (Noday f g a) where
-  type Not (Noday f g a) = Day f g a
-  Noday no != Day bca (fb :: f b) gc = (bca,(fb,gc)) != no
+instance (Functor f, Functor g, Prop' a) => Prop' (Night f g a) where
+  type Not (Night f g a) = Day f g a
+  Night no != Day bca (fb :: f b) gc = (bca,(fb,gc)) != no
