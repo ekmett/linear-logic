@@ -105,6 +105,7 @@ library
     Linear.Logic.Yoneda
     Linear.Logic.Internal
     Linear.Logic.Orphans
+    Linear.Logic.Prop
     Linear.Logic.Y
 
 test-suite plugin-canary

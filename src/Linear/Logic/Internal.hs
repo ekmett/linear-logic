@@ -28,14 +28,19 @@
 {-# language TypeOperators #-}
 {-# language UndecidableInstances #-}
 {-# options_haddock not-home #-}
-{-# options_ghc -Wno-unused-imports #-} -- toLinear is too damn convenient while debugging to keep erasing it
+{-# options_ghc -Wno-orphans -Wno-unused-imports -fplugin Linear.Logic.Plugin #-} -- toLinear is too damn convenient while debugging to keep erasing it
 
 -- | Core definitions for the linear logic embedding.
 --
--- This module defines the basic proposition class, connectives, and
+-- This module reexports the proposition class and defines connectives and
 -- refutation machinery. It is exposed for advanced use, but most users
 -- should prefer "Linear.Logic".
-module Linear.Logic.Internal where
+-- Instances for imported types live here so they can use the plugin, while
+-- "Linear.Logic.Prop" can be built before the plugin is loaded.
+module Linear.Logic.Internal
+( module Linear.Logic.Internal
+, module Linear.Logic.Prop
+) where
 
 import Control.Applicative (Const(..))
 import Control.Category qualified as C
@@ -49,39 +54,9 @@ import GHC.Generics
 import GHC.Types
 import Prelude.Linear hiding (Sum)
 import Linear.Logic.Orphans ()
+import Linear.Logic.Prop
 import Linear.Logic.Y
 import Unsafe.Linear (toLinear)
-
--- | Evidence that 'Not' is involutive for @a@.
---
--- This is used to avoid passing dictionaries when they aren't needed.
-type Prep a = Not (Not a) ~ a
-
--- | Propositions with a specified refutation type.
---
--- With @-fplugin Linear.Logic.Plugin@, a given @Prop a@ also supplies
--- @Prop (Not a)@ by exchanging the two refutation methods. This is a plugin
--- rule rather than a recursive superclass.
-class Prep a => Prop a where
-  -- | \(a^\bot\). The type of refutations of \(a\)
-  --
-  -- \(a^{\bot^\bot} \) = \(a\)
-  type Not a = c | c -> a
-  -- | \(a\) and \(a^\bot\) together yield a contradiction.
-  --
-  -- @
-  -- ('!=') :: a %1 -> 'Not' a %1 -> r
-  -- @
-  (!=) :: a %1 -> Not a %1 -> r
-  a != na = na =! a
-
-  -- | Refute with the arguments exchanged. Keeping both methods in the
-  -- dictionary lets the plugin dualize by swapping fields, without building
-  -- another flip closure at each step.
-  (=!) :: Not a %1 -> a %1 -> r
-  na =! a = a != na
-
-  {-# minimal (!=) | (=!) #-}
 
 -- | The unit for multiplicative conjunction, \(\texttt{()}\)
 --
@@ -285,12 +260,12 @@ parR' :: a ⅋ b %1 -> Not a %1 -> b
 parR' (Par p) = p R
 {-# inline parR' #-}
 
-instance (Prop a, Prep b) => Prop (a * b) where
+instance Prop a => Prop (a * b) where
   type Not (a * b) = Not a ⅋ Not b
   (a, b) != p = a != parL' p b
   {-# inline (!=) #-}
 
-instance (Prop a, Prep b) => Prop (a ⅋ b) where
+instance Prop a => Prop (a ⅋ b) where
   type Not (a ⅋ b) = Not a * Not b
   p != (a, b) = parL' p b != a
   {-# inline (!=) #-}
@@ -385,11 +360,11 @@ instance (Prop a, Prop b) => Prop (b # a) where
   ApartR a nb != Iso f = f R != (a :-#> nb)
   ApartL na b != Iso f = f L != (b :-#> na)
 
-instance (Prep a, Prop b) => Prop (a ⊸ b) where
+instance Prop b => Prop (a ⊸ b) where
   type Not (a ⊸ b) = b <#- a
   f != (a :-#> nb) = runLol f R a != nb
 
-instance (Prep a, Prop b) => Prop (b <#- a) where
+instance Prop b => Prop (b <#- a) where
   type Not (b <#- a) = a ⊸ b
   (a :-#> nb) != f = runLol f R a != nb
 
@@ -414,12 +389,12 @@ because (WhyNot a) = a
 -- | The exponential, or unrestricted modality, @!a@.
 --
 -- This embeds arbitrary non-linear Haskell values into 'Prop'.
-instance Prep a => Prop (Ur a) where
+instance Prop (Ur a) where
   type Not (Ur a) = WhyNot (Not a)
   Ur a != f = because f a
   {-# inline (!=) #-}
 
-instance Prep a => Prop (WhyNot a) where
+instance Prop (WhyNot a) where
   type Not (WhyNot a) = Ur (Not a)
   f != Ur a = because f a
   {-# inline (!=) #-}

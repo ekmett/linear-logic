@@ -9,13 +9,17 @@ import System.Timeout (timeout)
 import Test.HUnit
 
 compile :: Bool -> String -> String -> Test
-compile shouldPass name diagnostic = TestLabel name $ TestCase $ do
+compile = compileWith ["-fplugin", "Linear.Logic.Plugin"]
+
+compileWith :: [String] -> Bool -> String -> String -> Test
+compileWith options shouldPass name diagnostic = TestLabel name $ TestCase $ do
   result <- timeout (20 * 1000000) $ readProcessWithExitCode "ghc"
+    (options ++
     [ "-fno-code", "-fforce-recomp", "-dcore-lint", "-v0"
-    , "-package", "linear-logic", "-fplugin", "Linear.Logic.Plugin"
+    , "-package", "linear-logic"
     , "test/plugin-fixtures/" ++ name ++ ".hs"
     , "+RTS", "-M1G", "-RTS"
-    ] ""
+    ]) ""
   case result of
     Nothing -> assertFailure "compiler did not terminate within 20 seconds"
     Just (status, out, err) ->
@@ -30,6 +34,8 @@ main :: IO ()
 main = do
   result <- runTestTT $ TestList
     [ compile True "Good" ""
+    , compile True "ClassOnly" ""
+    , compileWith [] True "UnconstrainedInstances" ""
     , compile False "WrongEquality" "Bool"
     , compile False "WrongReverseEquality" "Bool"
     , compile False "MissingDictionary" "Prop"

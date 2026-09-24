@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Remove Prep and the equality superclass of Prop. Separate the class into
+  Linear.Logic.Prop so the core instances can also use the plugin, and drop
+  their double-negation constraints.
 - Replace the experimental plugin with involution rewriting, scoped dual
   dictionary synthesis, and evidence-backed inverse type inference.
 - Rename the Prop' class to Prop and remove the two-dictionary Prop synonym.

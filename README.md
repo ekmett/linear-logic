@@ -43,8 +43,13 @@ refuteDual = (!=) @(Not a)
 `Prop` is now the class previously named `Prop'`; the old two-dictionary
 constraint synonym is gone. A single `Prop a` supplies dual evidence through
 the plugin, without a recursive `Prop (Not a)` superclass or
-`UndecidableSuperClasses`. `Prep` remains available for code that does not load
-the plugin, but the higher-level combinators no longer require it explicitly.
+`UndecidableSuperClasses`. `Prep` has been removed, including the equality
+superclass of `Prop`. Enable the plugin wherever double-negation evidence is
+needed; it is no longer carried in proposition dictionaries.
+
+The class is defined in `Linear.Logic.Prop` and reexported through
+`Linear.Logic.Internal` and `Linear.Logic`. Keeping the declaration separate
+lets the core connectives and instances also use the plugin during compilation.
 
 The dictionary stores `(!=)` and `(=!)`, with the law `a =! b = b != a`.
 Dualization swaps these method fields and applies erased type coercions; it

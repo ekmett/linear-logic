@@ -18,7 +18,7 @@ import Control.Monad (foldM)
 import Data.Maybe (listToMaybe)
 import GHC.Builtin.Types (oneDataConTy)
 import GHC.Core (Expr(..), CoreExpr)
-import GHC.Core.Class (Class, classMethods, classTyCon, classTyVars, classSCTheta)
+import GHC.Core.Class (Class, classMethods, classTyCon, classSCTheta)
 import GHC.Core.Coercion
 import GHC.Core.Make (mkCoreApps)
 import GHC.Core.Predicate (EqRel(..), Pred(..), classifyPredType, mkClassPred)
@@ -79,15 +79,16 @@ logicPlugin = TcPlugin
 
 initialise :: TcPluginM Logic
 initialise = do
-  found <- findImportedModule (mkModuleName "Linear.Logic.Internal") NoPkgQual
+  found <- findImportedModule (mkModuleName "Linear.Logic.Prop") NoPkgQual
   mdl <- case found of
     Found _ mdl -> pure mdl
-    _ -> fail "Linear.Logic.Plugin: cannot find Linear.Logic.Internal"
+    _ -> fail "Linear.Logic.Plugin: cannot find Linear.Logic.Prop"
   notCon <- lookupOrig mdl (mkTcOcc "Not") >>= tcLookupTyCon
   propClass <- lookupOrig mdl (mkTcOcc "Prop") >>= tcLookupClass
   case classMethods propClass of
-    [refuteId, flippedId] -> pure Logic{notCon, propClass, refuteId, flippedId}
-    _ -> fail "Linear.Logic.Plugin: expected Prop to have two refutation methods"
+    [refuteId, flippedId] | null (classSCTheta propClass) ->
+      pure Logic{notCon, propClass, refuteId, flippedId}
+    _ -> fail "Linear.Logic.Plugin: expected Prop to have two refutation methods and no superclasses"
 
 notType :: Logic -> Type -> Type
 notType Logic{notCon} a = mkTyConApp notCon [a]
@@ -270,12 +271,7 @@ dualDictionary logic@Logic{propClass, refuteId, flippedId} a dict = do
         (liftCoSubstWith Representational [x,y] coercions methodType)
       forward = slot flippedId [same, nn]
       backward = slot refuteId [nn, same]
-      superclasses = map (substTyWith (classTyVars propClass) [na]) (classSCTheta propClass)
-  case superclasses of
-    [sc] | ClassPred eqClass tys <- classifyPredType sc ->
-      pure (dictionary propClass [na]
-        [dictionary eqClass tys [Coercion (involution logic na)], forward, backward])
-    _ -> fail "Linear.Logic.Plugin: expected Prop superclass to be Prep"
+  pure (dictionary propClass [na] [forward, backward])
 
 dictionary :: Class -> [Type] -> [CoreExpr] -> CoreExpr
 #if __GLASGOW_HASKELL__ >= 914
