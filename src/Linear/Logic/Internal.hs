@@ -27,7 +27,6 @@
 {-# language TypeFamilyDependencies #-}
 {-# language TypeOperators #-}
 {-# language UndecidableInstances #-}
-{-# language UndecidableSuperClasses #-}
 {-# options_haddock not-home #-}
 {-# options_ghc -Wno-unused-imports #-} -- toLinear is too damn convenient while debugging to keep erasing it
 
@@ -59,7 +58,11 @@ import Unsafe.Linear (toLinear)
 type Prep a = Not (Not a) ~ a
 
 -- | Propositions with a specified refutation type.
-class Prep a => Prop' a where
+--
+-- With @-fplugin Linear.Logic.Plugin@, a given @Prop a@ also supplies
+-- @Prop (Not a)@ by exchanging the two refutation methods. This is a plugin
+-- rule rather than a recursive superclass.
+class Prep a => Prop a where
   -- | \(a^\bot\). The type of refutations of \(a\)
   --
   -- \(a^{\bot^\bot} \) = \(a\)
@@ -70,16 +73,20 @@ class Prep a => Prop' a where
   -- ('!=') :: a %1 -> 'Not' a %1 -> r
   -- @
   (!=) :: a %1 -> Not a %1 -> r
+  a != na = na =! a
 
--- | A proposition whose refutation is also a proposition.
---
--- This avoids 'UndecidableSuperClasses' by splitting the constraint.
-type Prop a = (Prop' a, Prop' (Not a))
+  -- | Refute with the arguments exchanged. Keeping both methods in the
+  -- dictionary lets the plugin dualize by swapping fields, without building
+  -- another flip closure at each step.
+  (=!) :: Not a %1 -> a %1 -> r
+  na =! a = a != na
+
+  {-# minimal (!=) | (=!) #-}
 
 -- | The unit for multiplicative conjunction, \(\texttt{()}\)
 --
 -- \(\texttt{()}^\bot\) ≡ \(\bot\)
-instance Prop' () where
+instance Prop () where
   type Not () = Bot
   x != Bot b = b (Top x)
   {-# inline (!=) #-}
@@ -87,7 +94,7 @@ instance Prop' () where
 -- | The unit for additive disjunction, \(\texttt{Void}\)
 --
 -- \(\texttt{Void}^\bot\) ≡ \(\top\)
-instance Prop' Void where
+instance Prop Void where
   type Not Void = Top
   v != Top a = \case{} v a
   {-# inline (!=) #-}
@@ -114,7 +121,7 @@ instance Dupable Bot where
 -- | The unit for additive conjunction, \(\top\)
 --
 -- \(\top^\bot\) ≡ \(\texttt{Void}\)
-instance Prop' Top where
+instance Prop Top where
   type Not Top = Void
   Top a != v = \case{} v a
   {-# inline (!=) #-}
@@ -122,7 +129,7 @@ instance Prop' Top where
 -- | The unit for multiplicative disjunction, \(\bot\)
 --
 -- \(\bot^\bot\) ≡ \(\texttt{()}\)
-instance Prop' Bot where
+instance Prop Bot where
   type Not Bot = ()
   Bot a != x = a (Top x)
   {-# inline (!=) #-}
@@ -196,7 +203,7 @@ withR' :: a & b %1 -> b
 withR' (With f) = f R
 {-# inline withR' #-}
 
-instance (Prop' a, Prop' b) => Prop' (a & b) where
+instance (Prop a, Prop b) => Prop (a & b) where
   type Not (a & b) = Not a + Not b
   w != Left a = withL' w != a
   w != Right b = withR' w != b
@@ -209,7 +216,7 @@ instance (Prop' a, Prop' b) => Prop' (a & b) where
 infixr 2 +
 type (+) = Either
 
-instance (Prop' a, Prop' b) => Prop' (Either a b) where
+instance (Prop a, Prop b) => Prop (Either a b) where
   type Not (Either a b) = Not a & Not b
   Left a != w = a != withL' w
   Right a != w = a != withR' w
@@ -278,12 +285,12 @@ parR' :: a ⅋ b %1 -> Not a %1 -> b
 parR' (Par p) = p R
 {-# inline parR' #-}
 
-instance (Prop' a, Prep b) => Prop' (a * b) where
+instance (Prop a, Prep b) => Prop (a * b) where
   type Not (a * b) = Not a ⅋ Not b
   (a, b) != p = a != parL' p b
   {-# inline (!=) #-}
 
-instance (Prop' a, Prep b) => Prop' (a ⅋ b) where
+instance (Prop a, Prep b) => Prop (a ⅋ b) where
   type Not (a ⅋ b) = Not a * Not b
   p != (a, b) = parL' p b != a
   {-# inline (!=) #-}
@@ -291,7 +298,7 @@ instance (Prop' a, Prep b) => Prop' (a ⅋ b) where
 -- | This instance is for @(a %1 -> b)@ despite haddock's lies.
 -- The injective type family on @Not@ forces me to use a flexible
 -- instance, rather than have the instance self-improve
-instance Prop' b => Prop' (a %m -> b) where
+instance Prop b => Prop (a %m -> b) where
   type Not (a %m -> b) = Nofun m b a
   f != (Nofun a nb) = f a != nb
   {-# inline (!=) #-}
@@ -305,7 +312,7 @@ deriving stock instance (Read a, Read (Not b)) => Read (Nofun m b a)
 -- deriving stock instance (Eq a, Eq (Not b)) => Eq (Nofun m a b)
 -- deriving stock instance (Ord a, Ord (Not b)) => Ord (Nofun m a b)
 
-instance Prop' b => Prop' (Nofun m b a) where
+instance Prop b => Prop (Nofun m b a) where
   type Not (Nofun m b a) = a %m -> b
   Nofun a nb != f = f a != nb
   {-# inline (!=) #-}
@@ -368,21 +375,21 @@ data b # a
   = ApartL (Not a) b
   | ApartR a (Not b)
 
-instance (Prop' a, Prop' b) => Prop' (a ⧟ b) where
+instance (Prop a, Prop b) => Prop (a ⧟ b) where
   type Not (a ⧟ b) = b # a
   Iso f != ApartR a nb = f R != (a :-#> nb)
   Iso f != ApartL na b = f L != (b :-#> na)
 
-instance (Prop' a, Prop' b) => Prop' (b # a) where
+instance (Prop a, Prop b) => Prop (b # a) where
   type Not (b # a) = a ⧟ b
   ApartR a nb != Iso f = f R != (a :-#> nb)
   ApartL na b != Iso f = f L != (b :-#> na)
 
-instance (Prep a, Prop' b) => Prop' (a ⊸ b) where
+instance (Prep a, Prop b) => Prop (a ⊸ b) where
   type Not (a ⊸ b) = b <#- a
   f != (a :-#> nb) = runLol f R a != nb
 
-instance (Prep a, Prop' b) => Prop' (b <#- a) where
+instance (Prep a, Prop b) => Prop (b <#- a) where
   type Not (b <#- a) = a ⊸ b
   (a :-#> nb) != f = runLol f R a != nb
 
@@ -393,7 +400,7 @@ deriving stock instance (Read a, Read (Not b)) => Read (b <#- a)
 
 -- | The @?a@ or "why not?" modality.
 --
--- Laws: dual to 'Ur' via 'Prop'' instances.
+-- Laws: dual to 'Ur' via 'Prop' instances.
 type role WhyNot nominal
 newtype WhyNot a = WhyNot (forall r. Not a -> r)
 
@@ -407,12 +414,12 @@ because (WhyNot a) = a
 -- | The exponential, or unrestricted modality, @!a@.
 --
 -- This embeds arbitrary non-linear Haskell values into 'Prop'.
-instance Prep a => Prop' (Ur a) where
+instance Prep a => Prop (Ur a) where
   type Not (Ur a) = WhyNot (Not a)
   Ur a != f = because f a
   {-# inline (!=) #-}
 
-instance Prep a => Prop' (WhyNot a) where
+instance Prep a => Prop (WhyNot a) where
   type Not (WhyNot a) = Ur (Not a)
   f != Ur a = because f a
   {-# inline (!=) #-}
@@ -439,7 +446,7 @@ type IPrep f = INot (INot f) ~ f
 -- | Experimental: indexed propositions.
 class
   ( IPrep f
-  , forall a. Prop' (f a)
+  , forall a. Prop (f a)
   ) => IProp' (f :: i -> Type) where
   type INot (f :: i -> Type) = (c :: i -> Type) | c -> f
   icontradict :: f a %1 -> INot f a %1 -> r
@@ -447,33 +454,33 @@ class
 
 type IProp f = (IProp' f, IProp' (INot f))
 
-instance Prop' a => IProp' (Const a) where
+instance Prop a => IProp' (Const a) where
   type INot (Const a) = Const (Not a)
   inot = Refl
   icontradict (Const a) (Const na) = a != na
 
-instance Prop' a => Prop' (Const a b) where
+instance Prop a => Prop (Const a b) where
   type Not (Const a b) = Const (Not a) b
   Const a != Const na = a != na
 
-instance IProp' g => Prop' (DWith f g) where
+instance IProp' g => Prop (DWith f g) where
   type Not (DWith f g) = DSum f (INot g)
   h != (f :=> g) = icontradict (runDWith h f) g
 
-instance IProp' g => Prop' (DSum f g) where
+instance IProp' g => Prop (DSum f g) where
   type Not (DSum f g) = DWith f (INot g)
   (f :=> g) != h = icontradict g (runDWith h f)
 
 type (:&:) :: forall i. (i -> Type) -> (i -> Type) -> i -> Type
 newtype (:&:) f g a = IWith (forall h. Y f g h -> h a)
 
-instance (IProp' f, IProp' g) => Prop' ((:&:) f g a) where
+instance (IProp' f, IProp' g) => Prop ((:&:) f g a) where
   type Not ((:&:) f g a) = (INot f :+: INot g) a
   (!=) (IWith f) = \case
     L1 g -> icontradict (f L) g
     R1 g -> icontradict (f R) g
 
-instance (IProp' f, IProp' g) => Prop' ((:+:) f g a) where
+instance (IProp' f, IProp' g) => Prop ((:+:) f g a) where
   type Not ((:+:) f g a) = (INot f :&: INot g) a
   L1 g != IWith f = icontradict g (f L)
   R1 g != IWith f = icontradict g (f R)
@@ -495,11 +502,11 @@ instance (IProp' f, IProp' g) => IProp' (f :+: g) where
 newtype (:⅋:) (a :: i -> Type) (b :: i -> Type) (x :: i) =
   IPar (forall (c :: Type). Y (INot b x %1 -> a x) (INot a x %1 -> b x) c -> c)
 
-instance (IProp' f, IProp' g) => Prop' ((f :*: g) a) where
+instance (IProp' f, IProp' g) => Prop ((f :*: g) a) where
   type Not ((f :*: g) a) = (INot f :⅋: INot g) a
   (f :*: g) != IPar h = icontradict g (h R f)
 
-instance (IProp' f, IProp' g) => Prop' ((f :⅋: g) a) where
+instance (IProp' f, IProp' g) => Prop ((f :⅋: g) a) where
   type Not ((f :⅋: g) a) = (INot f :*: INot g) a
   IPar h != (f :*: g) = icontradict (h R f) g
 
@@ -518,30 +525,30 @@ instance (IProp' f, IProp' g) => IProp' (f :⅋: g) where
 -- This is encoded as @Ur a ⊸ b@, i.e. a non-linear assumption in a
 -- linear codomain.
 newtype a ⊃ b = Imp
-  (forall c. (Prop' a, Prop' b) => Y (Not b %1 -> WhyNot (Not a)) (a -> b) c -> c)
+  (forall c. (Prop a, Prop b) => Y (Not b %1 -> WhyNot (Not a)) (a -> b) c -> c)
 
 infixr 0 ⊃
 
-imp :: (forall c. (Prop' a, Prop' b) => Y (Not b %1 -> WhyNot (Not a)) (a -> b) c -> c) %1 -> a ⊃ b
+imp :: (forall c. (Prop a, Prop b) => Y (Not b %1 -> WhyNot (Not a)) (a -> b) c -> c) %1 -> a ⊃ b
 imp = Imp
 
-runImp :: (Prop' a, Prop' b) => (a ⊃ b) %1 -> Y (Not b %1 -> WhyNot (Not a)) (a -> b) c -> c
+runImp :: (Prop a, Prop b) => (a ⊃ b) %1 -> Y (Not b %1 -> WhyNot (Not a)) (a -> b) c -> c
 runImp (Imp f) = f
 
-impR' :: (Prop' a, Prop' b) => (a ⊃ b) %1 -> a -> b
+impR' :: (Prop a, Prop b) => (a ⊃ b) %1 -> a -> b
 impR' f = runImp f R
 
-impL' :: (Prop' a, Prop' b) => (a ⊃ b) %1 -> Not b %1 -> WhyNot (Not a)
+impL' :: (Prop a, Prop b) => (a ⊃ b) %1 -> Not b %1 -> WhyNot (Not a)
 impL' f = runImp f L
 
 data Noimp b a where
   Noimp :: a -> Not b %1 -> Noimp b a
 
-instance (Prop' a, Prop' b) => Prop' (a ⊃ b) where
+instance (Prop a, Prop b) => Prop (a ⊃ b) where
   type Not (a ⊃ b) = Noimp b a
   f != Noimp a b = runImp f R a != b
 
-instance (Prop' a, Prop' b) => Prop' (Noimp b a) where
+instance (Prop a, Prop b) => Prop (Noimp b a) where
   type Not (Noimp b a) = a ⊃ b
   Noimp a b != f = runImp f R a != b
 

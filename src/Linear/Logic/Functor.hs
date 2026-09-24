@@ -1,3 +1,4 @@
+{-# options_ghc -fplugin Linear.Logic.Plugin #-}
 {-# language CPP #-}
 {-# language BlockArguments #-}
 {-# language DefaultSignatures #-}
@@ -27,10 +28,8 @@
 {-# language TypeFamilyDependencies #-}
 {-# language TypeOperators #-}
 {-# language UndecidableInstances #-}
-{-# language UndecidableSuperClasses #-}
 {-# language ImportQualifiedPost #-}
 {-# language Trustworthy #-}
--- {-# options_ghc -fplugin Linear.Logic.Plugin #-} -- TODO use this to kill Prep constraints
 
 -- {-# options_ghc -Wno-unused-imports #-}
 
@@ -58,7 +57,7 @@ type family NotApart (p :: Type -> Type -> Type) :: Type -> Type -> Type
 -- * 'notIso' and 'notApart' witness an involution between @p@ and its
 --   refutation.
 class
-  ( forall a b. (Prop' a, Prop' b) => Prop' (p a b)
+  ( forall a b. (Prop a, Prop b) => Prop (p a b)
   , NotApart (NotIso p) ~ p
   ) => Iso p where
   type NotIso p = (q :: Type -> Type -> Type) | q -> p
@@ -154,15 +153,15 @@ funIso = lol \case
 
 -- | Category structure for linear-logic morphisms.
 class Category p where
-  id :: Prop' a => p a a
-  (.) :: (Prop' a, Prop' b, Prop' c) => p b c %1 -> p a b %1 -> p a c
+  id :: Prop a => p a a
+  (.) :: (Prop a, Prop b, Prop c) => p b c %1 -> p a b %1 -> p a c
 
 instance Category (FUN 'One) where
   id x = x
   f . g = \x -> f (g x)
 
 -- | A category that exposes extra refutation structure.
-class (forall a b. (Prop' a, Prop' b) => Prop' (p a b)) => NiceCategory p where
+class (forall a b. (Prop a, Prop b) => Prop (p a b)) => NiceCategory p where
   -- o :: p b c ⊸ p a b ⊸ p a c 
   o :: (Lol l, Lol l', Prop a, Prop b, Prop c) => l (p b c) (l' (p a b) (p a c))
 
@@ -197,8 +196,8 @@ instance NiceCategory (⧟) where
         ApartR a nc -> ApartR a (runLol (runIso bc R) L nc)
       R -> (bc .)
 
-liftUr :: forall a b l l'. (Prep a, Prop' b, Lol l, Lol l') => l (Ur (a ⊸ b)) (l' (Ur a) b)
--- liftUr :: (Prep a, Prop' b, Lol l, Lol l') => l (Ur (a ⊸ b)) (l' (Ur a) b)
+liftUr :: forall a b l l'. (Prop b, Lol l, Lol l') => l (Ur (a ⊸ b)) (l' (Ur a) b)
+-- liftUr :: (Prop b, Lol l, Lol l') => l (Ur (a ⊸ b)) (l' (Ur a) b)
 liftUr = lol \case
   R -> \(Ur a2b) -> lol \case
     R -> \(Ur a) -> fun' a2b a
@@ -214,16 +213,16 @@ liftUr = lol \case
 -- 'fmap' (g '.' f) = 'fmap' g '.' 'fmap' f
 -- @
 class
-  ( forall a. Prop' a => Prop' (f a)
+  ( forall a. Prop a => Prop (f a)
   ) => Functor f where
   -- | Map a linear function inside @f@, using a suspended implication.
-  fmap' :: (Prop' a, Prop' b, Lol l, Lol l') => l (Ur (a ⊸ b)) (l' (f a) (f b))
+  fmap' :: (Prop a, Prop b, Lol l, Lol l') => l (Ur (a ⊸ b)) (l' (f a) (f b))
 
 -- | Map a linear function inside @f@.
-fmap :: forall f a b l. (Functor f, Prop' a, Prop' b, Lol l) => (a ⊸ b) -> l (f a) (f b)
+fmap :: forall f a b l. (Functor f, Prop a, Prop b, Lol l) => (a ⊸ b) -> l (f a) (f b)
 fmap  f = fmap' (Ur f)
 
-fmapIso' :: (Functor f, Prop' a, Prop' b, Lol l, Iso i) => l (Ur (a ⧟ b)) (i (f a) (f b))
+fmapIso' :: (Functor f, Prop a, Prop b, Lol l, Iso i) => l (Ur (a ⧟ b)) (i (f a) (f b))
 fmapIso' = lol \case
   L -> \ni -> apart ni & \case
     ApartL nfa fb -> whyNot \a2b -> fmap (inv' a2b) fb != nfa
@@ -232,7 +231,7 @@ fmapIso' = lol \case
     L -> fmap (inv' a2b)
     R -> fmap (funIso a2b)
 
-fmapIso :: (Functor f, Prop' a, Prop' b, Iso i) => (a ⧟ b) -> i (f a) (f b)
+fmapIso :: (Functor f, Prop a, Prop b, Iso i) => (a ⧟ b) -> i (f a) (f b)
 fmapIso f = fmapIso' (Ur f)
 
 instance (m ~ 'One) => Functor (FUN m a) where
@@ -273,9 +272,7 @@ instance Prop x => Functor ((⊸) x) where
         L -> linear \nb -> contra1 g (contra1 f nb)
         R -> \a -> fun' f (fun' g a)
 
--- | Functors that preserve full propositions (not just 'Prop'').
---
--- Laws: as for 'Functor', but for full 'Prop' evidence.
+-- | Functors whose mapping operation consumes its morphism linearly.
 class Functor f => MFunctor f where
   mfmap :: (Prop a, Prop b, Lol l, Lol l') =>  l (a ⊸ b) (l' (f a) (f b))
 
@@ -307,7 +304,7 @@ instance Prop x => MFunctor ((⅋) x) where
       parR xpa nx :-#> nb
     R -> \x -> contra' (mfmapTensor' (contra' x))
 
--- lolPar :: (Iso iso, Prep a) => (a ⊸ b) `iso` (Not a ⅋ b)
+-- lolPar :: Iso iso => (a ⊸ b) `iso` (Not a ⅋ b)
 
 instance Prop x => MFunctor ((⊸) x) where
   mfmap = lol \case
@@ -434,7 +431,7 @@ instance Prop b => Functor ((<#-) b) where
 -- 'contramap' (g '.' f) = 'contramap' f '.' 'contramap' g
 -- @
 class
-  ( forall a. Prop' a => Prop' (f a)
+  ( forall a. Prop a => Prop (f a)
   ) => Contravariant f where
   contramap' :: (Prop a, Prop b, Lol l, Lol l') => l (Ur (a ⊸ b)) (l' (f b) (f a))
 
@@ -1303,7 +1300,7 @@ inv' = lol \case
   L -> \x -> swapApart' (apart x)
   R -> inv''
 
-inv :: (Iso i) => i (a ⧟ b) (b ⧟ a)
+inv :: Iso i => i (a ⧟ b) (b ⧟ a)
 inv = iso \case L -> inv'; R -> inv'
 
 swapApart'' :: a # b %1 -> b # a
@@ -1321,7 +1318,7 @@ swapApart = iso \case L -> swapApart'; R -> swapApart'
 --------------------------------------------------------------------------------
 
 curryTensor'
-  :: (Lol l, Lol l', Lol l'', Prep a, Prep b, Prep c)
+  :: (Lol l, Lol l', Lol l'')
   => l ((a * b) ⊸ c) (l' a (l'' b c))
 curryTensor' = lol \case
   L -> \nf -> apartR nf &
@@ -1335,7 +1332,7 @@ curryTensor' = lol \case
       R -> \b -> fun f (a, b)
 
 uncurryTensor'
-  :: (Lol l, Lol l', Prep a, Prep b, Prep c)
+  :: (Lol l, Lol l')
   => l (a ⊸ b ⊸ c) (l' (a * b) c)
 uncurryTensor' = lol \case
   L -> \nf -> apartR nf &
@@ -1347,33 +1344,33 @@ uncurryTensor' = lol \case
     R -> \(a,b) -> fun (fun f a) b
 
 curryTensor
-  :: (Iso i, Prep a, Prep b, Prep c)
+  :: Iso i
   => i ((a * b) ⊸ c) (a ⊸ b ⊸ c)
 curryTensor = iso \case
   L -> uncurryTensor'
   R -> curryTensor'
 
 uncurryTensor
-  :: (Iso i, Prep a, Prep b, Prep c)
+  :: Iso i
   => i (a ⊸ (b ⊸ c)) ((a * b) ⊸ c)
 uncurryTensor = iso \case
   L -> curryTensor'
   R -> uncurryTensor'
 
-flip'' :: (Prep a, Prep b, Prep c, Lol l, Lol l') => (a ⊸ b ⊸ c) %1 -> l b (l' a c)
+flip'' :: (Lol l, Lol l') => (a ⊸ b ⊸ c) %1 -> l b (l' a c)
 flip'' f = lol \case
   L -> \nac -> apartR nac & \(a :-#> nc) -> contra' (fun' f a) nc
   R -> \b -> lol \case
     L -> \nc -> contra' f (b :-#> nc)
     R -> \a -> fun' (fun' f a) b
 
-flip' :: (Prep a, Prep b, Prep c, Lol l, Lol l', Lol l'') => l (a ⊸ b ⊸ c) (l' b (l'' a c))
+flip' :: (Lol l, Lol l', Lol l'') => l (a ⊸ b ⊸ c) (l' b (l'' a c))
 flip' = lol \case
   L -> \nbac -> apartR nbac & \(b :-#> nac) ->
     apartR nac & \(a :-#> nc) -> a :-#> b :-#> nc
   R -> flip''
 
-flip :: (Prep a, Prep b, Prep c, Iso iso) => iso (a ⊸ b ⊸ c) (b ⊸ a ⊸ c)
+flip :: Iso iso => iso (a ⊸ b ⊸ c) (b ⊸ a ⊸ c)
 flip = iso \case
   L -> flip'
   R -> flip'
@@ -1407,7 +1404,7 @@ eitherToPar = contra' tensorToWith
 --------------------------------------------------------------------------------
 
 -- | multiplicative excluded-middle, equivalent to multiplicative law of non-contradiction
-mem :: Prep p => p ⅋ Not p
+mem :: p ⅋ Not p
 mem = par \case L -> \x -> x; R -> \x -> x
 
 -- | additive excluded middle, or additive law of non-contradiction is a property of a proposition
@@ -1479,7 +1476,7 @@ seelyTop = iso \case
 --
 -- This is generally not valid in linear logic, but holds
 -- in affine logic, and seems to hold here.
-semiseely :: (Iso i, Prep p) => i (Ur (p * q)) (Ur p * Ur q)
+semiseely :: Iso i => i (Ur (p * q)) (Ur p * Ur q)
 semiseely = iso \case
   L -> lol \case
     L -> \k -> par \case
@@ -1511,7 +1508,7 @@ weakenUr = lol \case
     R -> \Ur{} -> p
 {-# inline weakenUr #-}
 
-apUr :: forall p q. (Prep p, Prep q) => Ur (p ⊸ q) ⊸ Ur p ⊸ Ur q
+apUr :: forall p q. Ur (p ⊸ q) ⊸ Ur p ⊸ Ur q
 apUr = lol \case
   L -> \(Ur p :-#> WhyNot nq) -> whyNot \nppq -> nq (fun nppq p)
   R -> \(Ur nppq) -> lol \case
@@ -1542,7 +1539,7 @@ dupUr = iso \case
     L -> \p -> WhyNot \a -> because (parR' p (Ur a)) a
     R -> \(Ur a) -> (Ur a, Ur a)
 
-contractUr :: (Prep p, Prop q) => (Ur p ⊸ Ur p ⊸ q) ⊸ Ur p ⊸ q
+contractUr :: Prop q => (Ur p ⊸ Ur p ⊸ q) ⊸ Ur p ⊸ q
 contractUr = lol \case
   L -> \(Ur p :-#> nq) -> (Ur p :-#> (Ur p :-#> nq))
   R -> \x -> lol \case
@@ -1554,7 +1551,7 @@ returnWhyNot :: (Lol l, Prop p) => l p (WhyNot p)
 returnWhyNot = contra' extractUr
 {-# inline returnWhyNot #-}
 
-joinWhyNot :: (Lol l, Prep p) => l (WhyNot (WhyNot p)) (WhyNot p)
+joinWhyNot :: Lol l => l (WhyNot (WhyNot p)) (WhyNot p)
 joinWhyNot = contra' duplicateUr
 {-# inline joinWhyNot #-}
 
@@ -1578,26 +1575,26 @@ right = lol \case
   L -> withR'
   R -> Right
 
-parR :: (Lol l, Lol l', Prep a) => l (a ⅋ b) (l' (Not a) b)
+parR :: (Lol l, Lol l') => l (a ⅋ b) (l' (Not a) b)
 parR = lol \case
   L -> \g -> apartR g & \(x :-#> y) -> (x, y)
   R -> \p -> lol \case
     L -> parL' p
     R -> parR' p
 
-parL :: (Lol l, Lol l', Prep b) => l (a ⅋ b) (l' (Not b) a)
+parL :: (Lol l, Lol l') => l (a ⅋ b) (l' (Not b) a)
 parL = lol \case
   L -> \g -> apartR g & \(x :-#> y) -> (y, x)
   R -> \p -> lol \case
     L -> parR' p
     R -> parL' p
 
-contra'' :: forall l p q. (Lol l, Prep p, Prep q) => p ⊸ q %1 -> l (Not q) (Not p)
+contra'' :: forall l p q. Lol l => p ⊸ q %1 -> l (Not q) (Not p)
 contra'' = \(Lol f) -> lol \case
   L -> \na -> f R na
   R -> \nb -> f L nb
 
-contra1 :: (Prep p, Prep q) => (p ⊸ q) %1 -> Not q %1 -> Not p
+contra1 :: (p ⊸ q) %1 -> Not q %1 -> Not p
 contra1 f = contra' f
 
 #if __GLASGOW_HASKELL__ >= 904
@@ -1605,7 +1602,7 @@ unsafeNofun :: Nofun 'One b a %1 -> Nofun 'Many b a
 unsafeNofun = unsafeLinear unsafeCoerce
 #endif
 
-contra' :: forall l l' p q. (Lol l, Lol l', Prep p, Prep q) => l (p ⊸ q) (l' (Not q) (Not p))
+contra' :: forall l l' p q. (Lol l, Lol l') => l (p ⊸ q) (l' (Not q) (Not p))
 contra' = lol \case
   L -> \nf -> apartR nf & \(p :-#> nq) -> nq :-#> p
   R -> contra''
@@ -1615,29 +1612,29 @@ contra'ish = lol \case
   L -> \nf -> apartR nf & \(p :-#> nq) -> nq :-#> p
   R -> contra''
 
-contra :: forall iso p q. (Iso iso, Prep p, Prep q) => iso (p ⊸ q) (Not q ⊸ Not p)
+contra :: forall iso p q. Iso iso => iso (p ⊸ q) (Not q ⊸ Not p)
 contra = iso \case
   L -> contra'
   R -> contra'
 
-contraIso'' :: forall iso p q. (Iso iso, Prep p, Prep q) => p ⧟ q %1 -> iso (Not q) (Not p)
+contraIso'' :: forall iso p q. Iso iso => p ⧟ q %1 -> iso (Not q) (Not p)
 contraIso'' = \(Iso f) -> iso \case
   L -> contra' (f L)
   R -> contra' (f R)
 
-contraIso' :: forall l iso p q. (Lol l, Iso iso, Prep p, Prep q) => l (p ⧟ q) (iso (Not q) (Not p))
+contraIso' :: forall l iso p q. (Lol l, Iso iso) => l (p ⧟ q) (iso (Not q) (Not p))
 contraIso' = lol \case
   L -> \x -> apart x & \case
     ApartL p nq -> ApartL nq p
     ApartR p nq -> ApartR nq p
   R -> contraIso''
 
-contraIso :: forall iso p q. (Iso iso, Prep p, Prep q) => iso (p ⧟ q) (Not q ⧟ Not p)
+contraIso :: forall iso p q. Iso iso => iso (p ⧟ q) (Not q ⧟ Not p)
 contraIso = iso \case
   L -> contraIso'
   R -> contraIso'
 
-lolPar :: (Iso iso, Prep a) => (a ⊸ b) `iso` (Not a ⅋ b)
+lolPar :: Iso iso => (a ⊸ b) `iso` (Not a ⅋ b)
 lolPar = iso \case
   L -> lol \case
     L -> \(a :-#> nb) -> (a, nb)

@@ -16,8 +16,58 @@ The library and its test suites build with GHC 9.14.1 and cabal-install 3.16:
 
 ```sh
 cabal build all --enable-tests
-cabal test all --test-show-details=direct
+cabal test all -fcore-lint --test-show-details=direct
+cabal exec -- runghc -package=HUnit test/PluginRejections.hs
 ```
+
+The plugin uses GHC's type-family rewriter API, available from GHC 9.4.
+
+Plugin
+------
+
+Enable the plugin in modules that use the involution and dual-dictionary laws:
+
+```haskell
+{-# LANGUAGE LinearTypes, ScopedTypeVariables, TypeApplications, TypeFamilies #-}
+{-# OPTIONS_GHC -fplugin Linear.Logic.Plugin #-}
+
+import Linear.Logic
+
+doubleNegation :: Not (Not a) %1 -> a
+doubleNegation a = a
+
+refuteDual :: forall a r. Prop a => Not a %1 -> a %1 -> r
+refuteDual = (!=) @(Not a)
+```
+
+`Prop` is now the class previously named `Prop'`; the old two-dictionary
+constraint synonym is gone. A single `Prop a` supplies dual evidence through
+the plugin, without a recursive `Prop (Not a)` superclass or
+`UndecidableSuperClasses`. `Prep` remains available for code that does not load
+the plugin, but the higher-level combinators no longer require it explicitly.
+
+The dictionary stores `(!=)` and `(=!)`, with the law `a =! b = b != a`.
+Dualization swaps these method fields and applies erased type coercions; it
+does not introduce another runtime flip wrapper. An existing dual dictionary
+in scope takes precedence. Instances may implement either method; the other
+has a flipped default.
+
+The plugin treats `Not (Not a) ~ a` as an axiom of the embedding and rewrites
+it inside larger types. `Not` instances must respect that law. Dictionary
+synthesis uses actual given evidence, including for compound propositions;
+it does not invent dictionaries without a source. The indexed `IProp'`/`IProp`
+API is unchanged.
+
+The `core-lint` development flag checks the plugin and the generated evidence
+in its tests. The tests exercise both method slots,
+repeated dualization, and dictionary selection. The separate HUnit compiler
+tests check rejection of false equalities, missing or unrelated dictionaries,
+an unrelated family also called `Not`, and cyclic inference.
+
+Full-library Core Lint also reports pre-existing failures in `contra''`,
+`contraIso''`, `parL`, `parR`, and `dupUr`; these reproduce on the version
+before the plugin replacement. The development flag therefore targets the
+plugin and its evidence tests.
 
 Contact Information
 -------------------

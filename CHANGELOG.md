@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Replace the experimental plugin with involution rewriting, scoped dual
+  dictionary synthesis, and evidence-backed inverse type inference.
+- Rename the Prop' class to Prop and remove the two-dictionary Prop synonym.
+  Add the (=!) method so dualization swaps existing dictionary slots.
+- Build the plugin in an internal sublibrary and use it in the library's
+  higher-level modules; remove their explicit Prep requirements and remove
+  UndecidableSuperClasses. The rewriter requires GHC 9.4 or later.
+- Exercise plugin evidence with Core Lint, HUnit runtime tests, and compiler
+  acceptance/rejection tests.
 - Support GHC 9.14.1 and linear-base 0.8, including updated plugin APIs and
   explicit multiplicities in the linear-function Profunctor instance.
 - Remove the ghc-tcplugins-extra dependency in favor of the GHC API directly.
