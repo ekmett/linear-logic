@@ -10,6 +10,8 @@ module Main where
 
 import Linear.Logic
 import Linear.Logic.Functor (dist, weakDist)
+import Linear.Logic.Functor qualified as Logic
+import System.Exit (exitFailure)
 import Test.HUnit
 import Prelude qualified as P
 
@@ -93,9 +95,23 @@ testWeakDistEitherRight =
     Right ((), ()) -> P.True
     Left _ -> P.False
 
+type Choice = P.Either () ()
+
+testDimapLinearInput :: P.Bool
+testDimapLinearInput =
+  let f :: (Choice %1 -> Choice) %1 -> Choice %1 -> Choice
+      f = runLol (Logic.dimap @(%->) Logic.swapEither' Logic.id) R
+  in f (\x -> x) (Left ()) P.== Right ()
+
+testDimapLinearOutput :: P.Bool
+testDimapLinearOutput =
+  let f :: (Choice %1 -> Choice) %1 -> Choice %1 -> Choice
+      f = runLol (Logic.dimap @(%->) Logic.id Logic.swapEither') R
+  in f (\x -> x) (Left ()) P.== Right ()
+
 main :: P.IO ()
 main = do
-  _ <- runTestTT (TestList
+  result <- runTestTT (TestList
     [ TestCase (assertBool "withL'" testWithL)
     , TestCase (assertBool "withR'" testWithR)
     , TestCase (assertBool "left" testLeft)
@@ -108,5 +124,9 @@ main = do
     , TestCase (assertBool "dist inv tensor/plus (Right)" testDistEitherInvRight)
     , TestCase (assertBool "weakDist tensor/plus (Left)" testWeakDistEitherLeft)
     , TestCase (assertBool "weakDist tensor/plus (Right)" testWeakDistEitherRight)
+    , TestCase (assertBool "dimap linear input" testDimapLinearInput)
+    , TestCase (assertBool "dimap linear output" testDimapLinearOutput)
     ])
-  P.pure ()
+  if errors result P.== 0 P.&& failures result P.== 0
+    then P.pure ()
+    else exitFailure

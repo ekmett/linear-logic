@@ -571,12 +571,16 @@ instance Profunctor (FUN 'One) where
           let Nofun a nd = unsafeNofun n
               a2b_a = fun' a2b a
           in WhyNot (unsafeLinear \(c2d :: c ⊸ d) ->
-            b2c != (Nofun a2b_a (contra1 c2d nd) :: Nofun 'One c b))
+            linear b2c a2b_a != contra1 c2d nd)
       R -> \(Ur (c2d :: c ⊸ d)) -> lol \case
-        R -> \b2c a -> fun' c2d (b2c (fun' a2b a))
-        L -> unsafeLinear \n ->
-          let Nofun a nd = unsafeNofun n
-          in Nofun (fun' a2b a) (contra1 c2d nd)
+        R -> go where
+          go :: (b %1 -> c) %1 -> a %1 -> d
+          go b2c a = fun' c2d (b2c (fun' a2b a))
+        L -> go where
+          go :: Nofun 'One d a %1 -> Nofun 'One c b
+          go = unsafeLinear \n ->
+            let Nofun a nd = unsafeNofun n
+            in Nofun (fun' a2b a) (contra1 c2d nd)
 #else
 instance (m ~ 'One) => Profunctor (FUN m) where
   dimap' = lol \case
@@ -860,7 +864,7 @@ instance Symmetric (⧟) where
 class (Functor f, Bifunctor p) => WeakDist f p where
   weakDist :: (Lol l, Prop b, Prop c) => l (f (p b c)) (p (f b) (f c))
   default weakDist :: (Lol l, Prop b, Prop c, Dist f p) => l (f (p b c)) (p (f b) (f c))
-  weakDist = weakDist
+  weakDist = dist
 
 -- | Strong distribution as an isomorphism.
 --

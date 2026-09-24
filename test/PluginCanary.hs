@@ -1,8 +1,10 @@
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE TypeOperators #-}
 
 module Main where
 
+import Data.Type.Equality (type (~))
 import Linear.Logic.Internal (Not)
 import Prelude (IO, Int, putStrLn)
 

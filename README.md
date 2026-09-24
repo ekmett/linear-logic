@@ -9,6 +9,16 @@ recover the full suite of linear unitors, not just two of them, meaning we model
 
 The central idea is to track for each type not just its type of proofs, but also its type of refutations.
 
+Building
+--------
+
+The library and its test suites build with GHC 9.14.1 and cabal-install 3.16:
+
+```sh
+cabal build all --enable-tests
+cabal test all --test-show-details=direct
+```
+
 Contact Information
 -------------------
 

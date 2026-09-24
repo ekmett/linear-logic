@@ -23,11 +23,18 @@ module Linear.Logic.Plugin where
 import Control.Monad.IO.Class
 -- import Data.Foldable (traverse_)
 import GHC.Builtin.Names
-import GHC.Builtin.Types
+#if __GLASGOW_HASKELL__ < 914
+import GHC.Builtin.Types (eqDataCon)
+import GHC.Core.Coercion (mkPrimEqPred)
+#endif
 -- import GHC.Core
 -- import GHC.Core.Coercion
-import GHC.Core.Coercion (mkPrimEqPred)
+import GHC.Core.Coercion (mkUnivCo)
+import GHC.Core.TyCo.Rep (UnivCoProvenance(PluginProv))
 import GHC.Core.Predicate (EqRel(..), Pred(..), classifyPredType)
+#if __GLASGOW_HASKELL__ >= 914
+import GHC.Core.Predicate (mkNomEqPred)
+#endif
 import GHC.Core.Type
 -- import GHC.Core.TyCo.Rep
 import GHC.Driver.Plugins (Plugin(..), defaultPlugin, purePlugin)
@@ -38,7 +45,6 @@ import GHC.Tc.Plugin
 import GHC.Tc.Types
 import GHC.Tc.Types.Constraint
 import GHC.Tc.Types.Evidence
-import GHC.TcPluginM.Extra (tracePlugin, evByFiat)
 -- import GHC.Types.Var
 #if __GLASGOW_HASKELL__ >= 908
 import GHC.Unit.Module (mkModuleName)
@@ -60,8 +66,7 @@ plugin = defaultPlugin
   } where
 
 logicPlugin :: TcPlugin
-logicPlugin = tracePlugin "linear-logic"
-  TcPlugin
+logicPlugin = TcPlugin
   { tcPluginInit = tcPluginIO $ pure ()
   , tcPluginSolve = solveLogic
   , tcPluginRewrite = const emptyUFM
@@ -82,6 +87,8 @@ solveLogic () _evb givens wanteds = do
 #else
 solveLogic () _evb givens _deriveds wanteds = do
 #endif
+  tcPluginTrace "linear-logic" $
+    vcat [text "givens:" <+> ppr givens, text "wanteds:" <+> ppr wanteds]
   Found _ lli <- findImportedModule (mkModuleName "Linear.Logic.Internal") NoPkgQual
   notName <- lookupOrig lli (mkTcOcc "Not")
   notTyCon <- tcLookupTyCon notName
@@ -125,14 +132,14 @@ solveLogic () _evb givens _deriveds wanteds = do
         | Just (n1, [nx]) <- splitTyConApp_maybe nnx, hasKey n1 notKey
         , Just (n2, [x]) <- splitTyConApp_maybe nx, hasKey n2 notKey
         -> do
-          wantedEvidence <- newWanted (ctLoc ct) (mkPrimEqPred x y)
+          wantedEvidence <- newWanted (ctLoc ct) (mkNomEqPred x y)
           -- io $ putStrLn $ "not-not: " ++ pp nnx ++ " ~ " ++ pp y ++ " if " ++ pp x ++ " ~ " ++ pp y
           pure ([(evByFiat "not-not" nnx y, ct)],[mkNonCanonical wantedEvidence])
       EqPred NomEq y nnx
         | Just (n1, [nx]) <- splitTyConApp_maybe nnx, hasKey n1 notKey
         , Just (n2, [x]) <- splitTyConApp_maybe nx, hasKey n2 notKey
         -> do
-          wantedEvidence <- newWanted (ctLoc ct) (mkPrimEqPred x y)
+          wantedEvidence <- newWanted (ctLoc ct) (mkNomEqPred x y)
           -- io $ putStrLn $ "not-not: " ++ pp y ++ " ~ " ++ pp nnx ++ " if " ++ pp x ++ " ~ " ++ pp y
           pure ([(evByFiat "not-not" nnx y, ct)],[mkNonCanonical wantedEvidence])
       EqPred NomEq nx y
@@ -147,10 +154,14 @@ solveLogic () _evb givens _deriveds wanteds = do
         , Just (n2, [x]) <- splitTyConApp_maybe nx, hasKey n2 notKey
         -> do
         -- io $ putStrLn $ "Ooh ooh ooh: " ++ show (pp c, pp x, pp y)
-        wantedEvidence <- newWanted (ctLoc ct) (mkPrimEqPred x y)
+        wantedEvidence <- newWanted (ctLoc ct) (mkNomEqPred x y)
 
 
-        pure ([(evDataConApp eqDataCon [liftedTypeKind,x,y] [runEvExpr $ evByFiat "not-not" x y], ct)],[mkNonCanonical wantedEvidence])
+#if __GLASGOW_HASKELL__ >= 914
+        pure ([(evDictApp c [liftedTypeKind,nnx,y] [runEvExpr $ evByFiat "not-not" nnx y], ct)],[mkNonCanonical wantedEvidence])
+#else
+        pure ([(evDataConApp eqDataCon [liftedTypeKind,nnx,y] [runEvExpr $ evByFiat "not-not" nnx y], ct)],[mkNonCanonical wantedEvidence])
+#endif
       ClassPred c tys -> do
         -- io $ putStrLn $ "ClassPred " ++ show (pp c, pp tys)
         pure ([],[])
@@ -163,3 +174,17 @@ solveLogic () _evb givens _deriveds wanteds = do
 
   results <- traverse tryToSolve wanteds
   pure $ TcPluginOk (results >>= fst) (results >>= snd)
+
+#if __GLASGOW_HASKELL__ < 914
+mkNomEqPred :: Type -> Type -> PredType
+mkNomEqPred = mkPrimEqPred
+#endif
+
+-- | Assert a nominal equality justified by the plugin's double-negation law.
+evByFiat :: String -> Type -> Type -> EvTerm
+evByFiat name a b = evCoercion $
+#if __GLASGOW_HASKELL__ >= 912
+  mkUnivCo (PluginProv name) [] Nominal a b
+#else
+  mkUnivCo (PluginProv name) Nominal a b
+#endif
